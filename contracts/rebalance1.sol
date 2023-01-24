@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 import "./AaveInterfaces/aaveIWETHGateway.sol";
 import "./AaveInterfaces/aaveIPool.sol";
@@ -15,9 +14,7 @@ import "./TransferHelper.sol";
 
 import "hardhat/console.sol";
 
-contract FirstRebalanceTry is ERC20 {
-
-    using SafeMath for uint256;
+contract Rebalance1 is ERC20 {
 
     // =================================
 	// Storage for pool
@@ -41,41 +38,12 @@ contract FirstRebalanceTry is ERC20 {
     INonfungiblePositionManager public uniswapPositionNFT;
 
     uint256 public liquididtyTokenId;
+    int24 lowerTickOfOurToken;
+    int24 upperTickOfOurToken;
 
     // =================================
-	// Our pool
+	// Temporary solution for testing
 	// =================================
-
-    function sharesWorth(uint256 shares) public view returns (uint256) {
-        return (usdBalance * shares) / totalSupply();
-    }
-
-    function depositToPool(uint256 _amount) public {
-        uint256 sharesToGive = (usdBalance != _amount)
-            ? ((_amount * totalSupply()) / (usdBalance - _amount))
-            : _amount;
-
-        usdBalance += _amount;
-        _mint(msg.sender, sharesToGive);
-
-        require(sharesWorth(sharesToGive) <= _amount);
-
-        TransferHelper.safeTransferFrom(usd, msg.sender, address(this), _amount);
-    }
-
-    function withdrawFromPool(uint256 _amount) public {
-        uint256 etherToReturn = sharesWorth(_amount);
-        _burn(msg.sender, _amount);
-        TransferHelper.safeTransfer(usd, msg.sender, etherToReturn);
-    }
-
-    // =================================
-	// Approve
-	// =================================
-
-    function giveApprove(address _token, address _spender, uint256 _amount) public {
-        TransferHelper.safeApprove(_token, _spender, _amount);
-    }
 
     function giveAllApproves() public {
         TransferHelper.safeApprove(usd, address(aaveV3pool), type(uint256).max);
@@ -96,62 +64,13 @@ contract FirstRebalanceTry is ERC20 {
     }
 
     // =================================
-	// Aave deposit and withdraw
+	// View funcitons
 	// =================================
 
-    function depositToAvee() public payable {
-        TransferHelper.safeTransferFrom(usd, msg.sender, address(this), 2500000000);
-        TransferHelper.safeApprove(usd, address(aaveV3pool), 2500000000);
 
-        aaveV3pool.supply(usd, 2000000000, address(this), 0);
+    function sharesWorth(uint256 shares) public view returns (uint256) {
+        return (usdBalance * shares) / totalSupply();
     }
-
-    function withdrawFromAave(uint256 _amount) public {
-        aaveV3pool.withdraw(usd, 2000000000, address(this));
-    }
-
-    // =================================
-	// Aave borrow and repay
-	// =================================
-
-    function borrowFromAave() public {
-        aaveWeth.approveDelegation(address(aaveWTG3), 1157920892373161954235709850090785326998466564056403945758400791312963);
-        console.log("ggggg");
-        aaveWTG3.borrowETH(address(aaveV3pool), 10000000000000000, 2, 0);
-    }
-
-    function repayToAave() public {
-        aaveWTG3.repayETH(address(aaveV3pool), 100000000000000000, 2, address(this));
-    }
-
-    function getUserAccountData() public view returns (uint256, uint256, uint256, uint256, uint256, uint256) {
-        return IPool(aaveV3pool).getUserAccountData(address(this));
-    }
-
-    // =================================
-	// Uniswap swap
-	// =================================
-
-    function makeSwap() public {
-        uint160 _sqrtPriceX96 = getSqrt();
-
-        TransferHelper.safeTransferFrom(usd, msg.sender, address(this), 1500000000);
-        TransferHelper.safeApprove(usd, address(uniswapRouter), 2000000000000000000);
-
-            uniswapRouter.exactOutputSingle(IV3SwapRouter.ExactOutputSingleParams({
-                tokenIn: usd,
-                tokenOut: weth,
-                fee: 500,
-                recipient: address(this),
-                amountOut: 500000000000000000,
-                amountInMaximum: 1500000000,
-                sqrtPriceLimitX96: 0 // _sqrtPriceX96
-            }));
-    }
-
-    // =================================
-	// Uniswap liquidity
-	// =================================
 
     function getTick() public view returns(int24) {
         (,int24 tick,,,,,) = uniswapPool.slot0();
@@ -160,48 +79,41 @@ contract FirstRebalanceTry is ERC20 {
 
     function getPrice() public view returns (uint256) {
         (uint160 sqrtPriceX96,,,,,,) = uniswapPool.slot0();
-        return uint256(sqrtPriceX96).mul(uint256(sqrtPriceX96)).mul(1e18) >> (96*2);
+        return uint256(sqrtPriceX96) * uint256(sqrtPriceX96) * 1e18 >> (96*2);
     }
 
-    function getPriceUSD(uint256 _amount) public view returns (uint256) {
-        return (_amount * 1e18 / getPrice() / 2) * 60 / 100;
+    // function getLowerAndUpperTicks() public view returns (int24, int24) {
+    //     (,,,,,int24 tickLower,int24 tickUpper,,,,,) = uniswapPositionNFT.positions(liquididtyTokenId);
+    //     return (tickLower, tickUpper);
+    // }
+
+    function calculateBalanceBetweenTokensForRebalance(uint256 _amount) public view returns (uint256, uint256) {
+        int24 currentTick = getTick();
+
+        uint256 amount0 = 0;
+        uint256 amount1 = 0;
+
+        if (currentTick < lowerTickOfOurToken) {
+            amount0 = _amount;
+        } else if (currentTick > upperTickOfOurToken) {
+            amount1 = _amount;
+        } else {
+            amount0 = _amount * uint256(abs(currentTick - lowerTickOfOurToken)) / uint256(abs(upperTickOfOurToken - lowerTickOfOurToken));
+            amount1 = _amount * uint256(abs(upperTickOfOurToken - currentTick)) / uint256(abs(upperTickOfOurToken - lowerTickOfOurToken));
+        }
+
+        return (amount0, amount1);
     }
 
-    function getSqrt() public view returns (uint160) {
-        (uint160 sqrtPriceX96,,,,,,) = uniswapPool.slot0();
-        return sqrtPriceX96;
-    }
-
-    function addLuquidityToUniswap() external payable {
-        TransferHelper.safeApprove(usd, address(uniswapPositionNFT), 10000000000000000000000);
-        TransferHelper.safeApprove(weth, address(uniswapPositionNFT), 10000000000000000000000);
-        TransferHelper.safeTransferFrom(usd, msg.sender, address(this), 1500000000);
-        TransferHelper.safeTransferFrom(weth, msg.sender, address(this), 1000000000000000000);
-
-        int24 currectTick = getTick();
-
-        console.log("sdoneeee");
-
-        (liquididtyTokenId,,,) = uniswapPositionNFT.mint(INonfungiblePositionManager.MintParams({
-            token0: weth,
-            token1: usd,
-            fee: 500,
-            tickLower: (currectTick - 200) / 10 * 10,
-            tickUpper: (currectTick + 200) / 10 * 10,
-            amount0Desired: 1000000000000000000,
-            amount1Desired: 1000000000,
-            amount0Min: 0,
-            amount1Min: 0,
-            recipient: address(this),
-            deadline: block.timestamp
-        }));
+    function abs(int x) private pure returns (int) {
+        return x >= 0 ? x : -x;
     }
 
     // =================================
-	// Funciton of full circuit
+	// Main funciton
 	// =================================
 
-    function fullCircle(uint256 _amount) public {
+    function addLiqudityToOurPosition(uint256 _amount) public {
 
         usdBalance += _amount;
         uint256 sharesToGive = (usdBalance != _amount)
@@ -216,9 +128,10 @@ contract FirstRebalanceTry is ERC20 {
 
         if (liquididtyTokenId != 0) {
 
-            aaveV3pool.supply(usd, _amount/2, address(this), 0);
-            uint256 ethAmount = (_amount * 1e18 / getPrice() / 2) * 60 / 100;
+            (uint256 ethCoef, uint256 usdCoef) = calculateBalanceBetweenTokensForRebalance(_amount);
 
+            aaveV3pool.supply(usd, ethCoef, address(this), 0);
+            uint256 ethAmount = (ethCoef * 1e18 / getPrice()) * 60 / 100;
             aaveWTG3.borrowETH(address(aaveV3pool), ethAmount, 2, 0);
 
             uniswapPositionNFT.increaseLiquidity{value: ethAmount}(
@@ -226,28 +139,34 @@ contract FirstRebalanceTry is ERC20 {
                 ({
                     tokenId: liquididtyTokenId,
                     amount0Desired: ethAmount,
-                    amount1Desired: _amount * 30 / 100,
+                    amount1Desired: usdCoef * 60 / 100,
                     amount0Min: 0,
                     amount1Min: 0,
                     deadline: block.timestamp + 2 hours
                 })
             );
+
+            // это остаток от транзакции, который надо будет грамотно распределить между бороуингом и прямым депом в пул
+            TransferHelper.safeTransfer(usd, msg.sender, usdCoef * 40 / 100);
+
         } else {
 
             aaveV3pool.supply(usd, _amount/2, address(this), 0);
             uint256 ethAmount = (_amount * 1e18 / getPrice() / 2) * 60 / 100;
-
             aaveWTG3.borrowETH(address(aaveV3pool), ethAmount, 2, 0);
 
             int24 currectTick = getTick();
+            lowerTickOfOurToken = (currectTick - 200) / 10 * 10;
+            upperTickOfOurToken = (currectTick + 200) / 10 * 10;
+
             (liquididtyTokenId,,,) = uniswapPositionNFT.mint{value: ethAmount}(
                 INonfungiblePositionManager.MintParams
                 ({
                     token0: weth,
                     token1: usd,
                     fee: 500,
-                    tickLower: (currectTick - 200) / 10 * 10,
-                    tickUpper: (currectTick + 200) / 10 * 10,
+                    tickLower: lowerTickOfOurToken,
+                    tickUpper: upperTickOfOurToken,
                     amount0Desired: ethAmount,
                     amount1Desired: _amount * 30 / 100,
                     amount0Min: 0,
@@ -256,25 +175,18 @@ contract FirstRebalanceTry is ERC20 {
                     deadline: block.timestamp + 2 hours
                 })
             );
+
+            // это остаток от транзакции, который надо будет грамотно распределить между бороуингом и прямым депом в пул
+            TransferHelper.safeTransfer(usd, msg.sender, _amount * 20 / 100);
         }
         
     }
 
     // =================================
-	// fallBack
+	// FallBack
 	// =================================
 
-    receive() external payable {
-        console.log("receive");
-    }
-
-    // fallback() external payable {
-    //     // can be empty
-    // }
-
-    // function fallback() public payable {
-    //     console.log("fallback");
-    // }
+    receive() external payable {}
 
     // =================================
 	// Constructor

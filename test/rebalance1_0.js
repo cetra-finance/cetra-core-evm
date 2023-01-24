@@ -19,7 +19,7 @@ describe("Basic tests", function () {
 
 
 
-        const OurRebalance = await ethers.getContractFactory("FirstRebalanceTry");
+        const OurRebalance = await ethers.getContractFactory("Rebalance1");
         ourRebalance = await OurRebalance.deploy(
             '0x7F5c764cBc14f9669B88837ca1490cCa17c31607',
             '0x4200000000000000000000000000000000000006',
@@ -39,9 +39,9 @@ describe("Basic tests", function () {
         let donorWallet2 = await ethers.getSigner("0xBA12222222228d8Ba445958a75a0704d566BF2C8")
 
         await weth.connect(donorWallet2).transfer(owner.address, BigNumber.from("10000000000000000000"), { gasLimit: 1000000 });
-        await usd.connect(donorWallet).transfer(owner.address, 100000000000);
-        await usd.connect(donorWallet).transfer(user1.address, 200000000000);
-        await usd.connect(donorWallet).transfer(user2.address, 250000000000);
+        await usd.connect(donorWallet).transfer(owner.address, 1000000000000);
+        await usd.connect(donorWallet).transfer(user1.address, 2000000000000);
+        await usd.connect(donorWallet).transfer(user2.address, 2500000000000);
 
         await usd.connect(owner).approve(ourRebalance.address, 1000000000000000);
         await usd.connect(user1).approve(ourRebalance.address, 1000000000000000);
@@ -53,69 +53,17 @@ describe("Basic tests", function () {
         console.log(owner.address);
     });
     
-    // it("swap test", async function () { 
-    //     // console.log(await ourRebalance.getSqrt())
-
-    //     // console.log(await usd.balanceOf(owner.address));
-    //     // console.log(await weth.balanceOf(ourRebalance.address));
-    //     await ourRebalance.connect(owner).makeSwap();
-    //     // console.log(await usd.balanceOf(owner.address));
-    //     // console.log(await weth.balanceOf(ourRebalance.address));
-    // })
-
-    // it("aave borrow test", async function () {
-    //     // console.log(await usd.balanceOf(owner.address));
-    //     balanceBefore = await ethers.provider.getBalance(ourRebalance.address);
-    //     // console.log(await ethers.provider.getBalance(ourRebalance.address));
-
-    //     let tx1 = await ourRebalance.connect(owner).depositToAvee();
-    //     tx1.wait();
-    //     // console.log("done")
-    //     // console.log(await aUsd.balanceOf(ourRebalance.address));
-    //     // console.log(await aWeth.balanceOf(owner.address));
-    //     // console.log(await usd.balanceOf(owner.address));
-    //     // console.log(await weth.balanceOf(ourRebalance.address));
-    //     console.log("done1")
-    //     let tx2 = await ourRebalance.connect(owner).borrowFromAave();
-    //     tx2.wait();
-    //     console.log("done2")
-
-    //     // console.log(await usd.balanceOf(owner.address));
-    //     // console.log(await weth.balanceOf(ourRebalance.address));
-
-    //     // console.log(await ethers.provider.getBalance(ourRebalance.address));
-    //     expect(await ethers.provider.getBalance(ourRebalance.address)).to.be.equal(balanceBefore.add(BigNumber.from("100000000000000000")));
-    // })
-
-    // it("provide liquidity to uni", async function () {
-
-    //     let tick = await ourRebalance.getTick();
-    //     console.log(tick);
-
-    //     tx = await ourRebalance.connect(owner).addLuquidityToUniswap({value: BigNumber.from("2000000000000000000")});
-
-    //     expect(await uniPositionManager.balanceOf(ourRebalance.address)).to.be.equal(1);
-
-    //     let pisitionId = await ourRebalance.liquididtyTokenId();
-    //     let position = await uniPositionManager.positions(pisitionId);
-    //     console.log(position);
-
-    //     let myPosition = await uniPositionManager.positions(293788);
-    //     console.log(myPosition);
-    // })
 
     it("full circuit test", async function () {
 
-        // console.log(await ourRebalance.getPriceUSD(1000000000))
+        await ourRebalance.connect(owner).addLiqudityToOurPosition(1000000000);
 
-        await ourRebalance.connect(owner).fullCircle(1000000000);
+        console.log(await ourRebalance.calculateBalanceBetweenTokensForRebalance(100000))
 
-        // console.log(await ourRebalance.calculateBalanceBetweenTokensForRebalance(100000))
-
-        await ourRebalance.connect(user1).fullCircle(2000000000);
-        await ourRebalance.connect(user2).fullCircle(2500000000);
-        await ourRebalance.connect(user2).fullCircle(2500000000);
-        await ourRebalance.connect(user1).fullCircle(1700000000);
+        await ourRebalance.connect(user1).addLiqudityToOurPosition(2000000000);
+        await ourRebalance.connect(user2).addLiqudityToOurPosition(2500000000);
+        await ourRebalance.connect(user2).addLiqudityToOurPosition(2500000000);
+        await ourRebalance.connect(user1).addLiqudityToOurPosition(1700000000);
 
         let pisitionId = await ourRebalance.liquididtyTokenId();
         let position = await uniPositionManager.positions(pisitionId);
@@ -133,3 +81,6 @@ describe("Basic tests", function () {
     })
 
 })
+
+// 205922298
+// 2188100073

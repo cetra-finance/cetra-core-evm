@@ -57,4 +57,13 @@ library TransferHelper {
         (bool success, ) = to.call{value: value}(new bytes(0));
         require(success, 'STE');
     }
+
+    function safeGetBalance(
+        address token,
+        address owner
+    ) internal returns (uint256) {
+        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(IERC20.balanceOf.selector, owner));
+        require(success, 'SGB');
+        return abi.decode(data, (uint256));
+    }
 }
