@@ -139,6 +139,52 @@ contract Rebalance1 is ERC20 {
         );
     }
 
+    function calculateBalanceBetweenTokensForMint(
+        uint256 _amount
+    ) public returns (uint256, uint256, uint256, uint256, uint256) {
+        uint256 amount0USD = 0;
+        uint256 amount1USD = 0;
+        uint256 amount0Pool = 0;
+        uint256 amount1Pool = 0;
+
+        int24 currentTick = getTick();
+        lowerTickOfOurToken = (currentTick - 200) / 10 * 10;
+        upperTickOfOurToken = (currentTick + 200) / 10 * 10;
+
+        if (currentTick < lowerTickOfOurToken) {
+            amount0USD = _amount;
+        } else if (currentTick > upperTickOfOurToken) {
+            amount1USD = _amount;
+        } else {
+            amount0Pool = SqrtPriceMath.getAmount0Delta(
+                TickMath.getSqrtRatioAtTick(currentTick),
+                TickMath.getSqrtRatioAtTick(upperTickOfOurToken),
+                1000000000000000000,
+                false
+            );
+            amount1Pool = SqrtPriceMath.getAmount1Delta(
+                TickMath.getSqrtRatioAtTick(lowerTickOfOurToken),
+                TickMath.getSqrtRatioAtTick(currentTick),
+                1000000000000000000,
+                false
+            );
+            amount0USD =
+                ((_amount * amount0Pool * getPrice()) / 1e18) /
+                (amount1Pool + (amount0Pool * getPrice()) / 1e18);
+            amount1USD =
+                (_amount * amount1Pool) /
+                (amount1Pool + (amount0Pool * getPrice()) / 1e18);
+        }
+
+        return (
+            amount0USD,
+            amount1USD,
+            (amount0Pool * getPrice()) / 1e18,
+            amount1Pool,
+            getPrice()
+        );
+    }
+
     function abs(int x) private pure returns (int) {
         return x >= 0 ? x : -x;
     }
@@ -186,13 +232,15 @@ contract Rebalance1 is ERC20 {
 
         } else {
 
-            aaveV3pool.supply(usd, _amount/2, address(this), 0);
-            uint256 ethAmount = (_amount * 1e18 / getPrice() / 2) * 60 / 100;
+            (uint256 ethCoef,uint256 usdCoef,,,) = calculateBalanceBetweenTokensForMint(_amount);
+
+            aaveV3pool.supply(usd, ethCoef, address(this), 0);
+            uint256 ethAmount = (ethCoef * 1e18 / getPrice()) * 60 / 100;
             aaveWTG3.borrowETH(address(aaveV3pool), ethAmount, 2, 0);
 
-            int24 currectTick = getTick();
-            lowerTickOfOurToken = (currectTick - 200) / 10 * 10;
-            upperTickOfOurToken = (currectTick + 200) / 10 * 10;
+            // int24 currectTick = getTick();
+            // lowerTickOfOurToken = (currectTick - 200) / 10 * 10;
+            // upperTickOfOurToken = (currectTick + 200) / 10 * 10;
 
             (liquididtyTokenId,ourLiquidity,,) = uniswapPositionNFT.mint{value: ethAmount}(
                 INonfungiblePositionManager.MintParams
@@ -203,7 +251,7 @@ contract Rebalance1 is ERC20 {
                     tickLower: lowerTickOfOurToken,
                     tickUpper: upperTickOfOurToken,
                     amount0Desired: ethAmount,
-                    amount1Desired: _amount * 30 / 100,
+                    amount1Desired: usdCoef * 60 / 100,
                     amount0Min: 0,
                     amount1Min: 0,
                     recipient: address(this),
@@ -212,7 +260,7 @@ contract Rebalance1 is ERC20 {
             );
 
             // это остаток от транзакции, который надо будет грамотно распределить между бороуингом и прямым депом в пул
-            TransferHelper.safeTransfer(usd, msg.sender, _amount * 20 / 100);
+            TransferHelper.safeTransfer(usd, msg.sender, usdCoef * 40 / 100);
         }
         
     }
@@ -221,9 +269,9 @@ contract Rebalance1 is ERC20 {
         uint256 _shares
     ) public {
 
-        console.log("ourLiquidity", ourLiquidity);
+        // console.log("ourLiquidity", ourLiquidity);
         uint128 liquidity = uint128(ourLiquidity * sharesWorth(_shares) / totalSupply());
-        console.log("liquidity", liquidity);
+        // console.log("liquidity", liquidity);
         ourLiquidity -= liquidity;
 
         (uint256 amount0, uint256 amount1) = uniswapPositionNFT.decreaseLiquidity(
@@ -248,25 +296,25 @@ contract Rebalance1 is ERC20 {
         uniswapPositionNFT.unwrapWETH9(0, address(this));
         uniswapPositionNFT.sweepToken(usd, 0, address(this));
 
-        console.log("amount0", amount0);
-        console.log("amount1", amount1);
+        // console.log("amount0", amount0);
+        // console.log("amount1", amount1);
 
-        console.log("eth balance", address(this).balance);
-        console.log("usd balance", IERC20(usd).balanceOf(address(this)));
-        console.log("weth balance", IERC20(weth).balanceOf(address(this)));
+        // console.log("eth balance", address(this).balance);
+        // console.log("usd balance", IERC20(usd).balanceOf(address(this)));
+        // console.log("weth balance", IERC20(weth).balanceOf(address(this)));
 
         aaveWTG3.repayETH{value: amount0}(address(aaveV3pool), amount0, 2, address(this));
-        console.log("repay done");
+        // console.log("repay done");
         uint256 amountToWithdraw = amount0 * getPrice() *  1666 / 1e18 / 1000;
-        console.log("amountToWithdraw", amountToWithdraw);
+        // console.log("amountToWithdraw", amountToWithdraw);
         aaveV3pool.withdraw(usd, amountToWithdraw, address(this));
 
         uint256 usdToReturn = sharesWorth(_shares);
-        console.log("usdToReturn", usdToReturn);
-        console.log("usdToReturn * 80 / 100", usdToReturn * 80 / 100);
-        console.log("eth balance", address(this).balance);
-        console.log("usd balance", IERC20(usd).balanceOf(address(this)));
-        console.log("weth balance", IERC20(weth).balanceOf(address(this)));
+        // console.log("usdToReturn", usdToReturn);
+        // console.log("usdToReturn * 80 / 100", usdToReturn * 80 / 100);
+        // console.log("eth balance", address(this).balance);
+        // console.log("usd balance", IERC20(usd).balanceOf(address(this)));
+        // console.log("weth balance", IERC20(weth).balanceOf(address(this)));
         _burn(msg.sender, _shares);
         usdBalance -= usdToReturn;
         console.log(amountToWithdraw + ((usdToReturn - amountToWithdraw) * 60 / 100));

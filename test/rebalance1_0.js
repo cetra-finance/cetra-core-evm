@@ -112,7 +112,7 @@ describe("Basic tests", function () {
     it("withdraw Liqudity test", async function () {
 
         console.log("user1 balance", await usd.balanceOf(user1.address))
-        await ourRebalance.connect(user1).withdrawLiqudityFromOurPosition(3700000000);
+        await ourRebalance.connect(user1).withdrawLiqudityFromOurPosition(await ourRebalance.balanceOf(user1.address));
         console.log(await ourRebalance.balanceOf(user1.address))
         console.log(await ourRebalance.sharesWorth(await ourRebalance.balanceOf(user1.address)))
         console.log(await usd.balanceOf(ourRebalance.address))
@@ -126,6 +126,8 @@ describe("Basic tests", function () {
         console.log("owner balance", await usd.balanceOf(owner.address))
         await ourRebalance.connect(owner).withdrawLiqudityFromOurPosition(1000000000);
         console.log("owner balance", await usd.balanceOf(owner.address))
+        console.log(await usd.balanceOf(ourRebalance.address))
+        console.log(await weth.balanceOf(ourRebalance.address))
         console.log("---------------------")
         let pisitionId = await ourRebalance.liquididtyTokenId();
         console.log(await uniPositionManager.positions(pisitionId));
