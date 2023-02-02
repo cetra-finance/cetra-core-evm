@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.0;
+pragma solidity >=0.7.0;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
+import "./Uniswap/utils/LiquidityAmounts.sol";
 import "./Uniswap/libraries/TickMath.sol";
 import "./Uniswap/libraries/SqrtPriceMath.sol";
+import "./Uniswap/interfaces/IV3SwapRouter.sol";
+import "./Uniswap/interfaces/IUniswapV3Pool.sol";
+import "./Uniswap/interfaces/INonfungiblePositionManager.sol";
 
-import "./AaveInterfaces/aaveIWETHGateway.sol";
 import "./AaveInterfaces/aaveIPool.sol";
-import "./Uniswap/IV3SwapRouter.sol";
-import "./Uniswap/IUniswapV3Pool.sol";
-import "./Uniswap/INonfungiblePositionManager.sol";
+import "./AaveInterfaces/aaveIWETHGateway.sol";
 import "./AaveInterfaces/ICreditDelegationToken.sol";
+import "./AaveInterfaces/IAaveOracle.sol";
 
 import "./TransferHelper.sol";
 
@@ -18,333 +21,404 @@ import "hardhat/console.sol";
 
 contract Rebalance1 is ERC20 {
 
-    // =================================
-	// Storage for pool
-	// =================================
-
-    uint256 public usdBalance;
-    
-    // =================================
-	// Storage for logic
-	// =================================
-
-    address public usd;
-    address public weth;
-    ICreditDelegationToken public aaveWeth;
-
-    IWETHGateway public aaveWTG3;
-    IPool public aaveV3pool;
-
-    IV3SwapRouter public uniswapRouter;
-    IUniswapV3Pool public uniswapPool;
-    INonfungiblePositionManager public uniswapPositionNFT;
-
-    uint256 public liquididtyTokenId;
-    int24 lowerTickOfOurToken;
-    int24 upperTickOfOurToken;
-    uint128 public ourLiquidity;
+    using TickMath for int24;
 
     // =================================
-	// Temporary solution for testing
-	// =================================
+    // Storage for pool
+    // =================================
 
-    function giveAllApproves() public {
-        TransferHelper.safeApprove(usd, address(aaveV3pool), type(uint256).max);
-        TransferHelper.safeApprove(usd, address(uniswapRouter), type(uint256).max);
-        TransferHelper.safeApprove(usd, address(uniswapPositionNFT), type(uint256).max);
-        TransferHelper.safeApprove(usd, address(uniswapPool), type(uint256).max);
-        TransferHelper.safeApprove(usd, address(aaveWTG3), type(uint256).max);
-        TransferHelper.safeApprove(usd, address(aaveWeth), type(uint256).max);
+    uint256 private s_usdBalance;
+    int24 private s_lowerTickOfOurToken;
+    int24 private s_upperTickOfOurToken;
+    uint256 private s_liquidityTokenId;
 
-        TransferHelper.safeApprove(weth, address(aaveWTG3), type(uint256).max);
-        TransferHelper.safeApprove(weth, address(uniswapRouter), type(uint256).max);
-        TransferHelper.safeApprove(weth, address(uniswapPositionNFT), type(uint256).max);
-        TransferHelper.safeApprove(weth, address(uniswapPool), type(uint256).max);
-        TransferHelper.safeApprove(weth, address(aaveWTG3), type(uint256).max);
-        TransferHelper.safeApprove(weth, address(aaveWeth), type(uint256).max);
+    // =================================
+    // Storage for logic
+    // =================================
 
-        aaveWeth.approveDelegation(address(aaveWTG3), type(uint256).max);
+    //uint256 private immutable i_targetLTV;
+    // uint256 private immutable i_minLTV;
+    // uint256 private immutable i_maxLTV;
+
+    address private immutable i_usdAddress;
+    address private immutable i_wethAddress;
+
+    IAaveOracle private immutable i_aaveOracle;
+    ICreditDelegationToken private immutable i_aaveWeth;
+    IWETHGateway private immutable i_aaveWTG3;
+    IPool private immutable i_aaveV3Pool;
+
+    IV3SwapRouter private immutable i_uniswapRouter;
+    IUniswapV3Pool private immutable i_uniswapPool;
+    INonfungiblePositionManager private immutable i_uniswapNFTManager;
+
+    uint256 private constant PRECISION = 1e18;
+
+    // =================================
+    // Constructor
+    // =================================
+
+    constructor(
+        address _usdAddress,
+        address _wethAddress,
+        address _uniswapRouterAddress,
+        address _uniswapPoolAddress,
+        address _aaveWTG3Address,
+        address _aaveV3poolAddress,
+        address _aaveVWETHAddress,
+        address _aaveOracleAddress,
+        address _uniswapNFTManagerAddress
+    )
+        //uint256 _targetLTV
+        ERC20("FirstRebalanceTry", "FRT")
+    {
+        i_usdAddress = _usdAddress;
+        i_wethAddress = _wethAddress;
+        i_uniswapRouter = IV3SwapRouter(_uniswapRouterAddress);
+        i_uniswapPool = IUniswapV3Pool(_uniswapPoolAddress);
+        i_aaveWTG3 = IWETHGateway(_aaveWTG3Address);
+        i_aaveV3Pool = IPool(_aaveV3poolAddress);
+        i_aaveWeth = ICreditDelegationToken(_aaveVWETHAddress);
+        i_aaveOracle = IAaveOracle(_aaveOracleAddress);
+        i_uniswapNFTManager = INonfungiblePositionManager(
+            _uniswapNFTManagerAddress
+        );
+        //i_targetLTV = _targetLTV;
     }
 
     // =================================
-	// View funcitons
-	// =================================
+    // Main funciton
+    // =================================
 
+    function mint(uint256 usdAmount) public {
+        s_usdBalance += usdAmount;
+        uint256 sharesToMint = (s_usdBalance != usdAmount)
+            ? ((usdAmount * totalSupply()) / (s_usdBalance - usdAmount))
+            : usdAmount;
+        _mint(msg.sender, sharesToMint);
+        require(sharesWorth(sharesToMint) <= usdAmount, "FC0");
+        TransferHelper.safeTransferFrom(
+            i_usdAddress,
+            msg.sender,
+            address(this),
+            usdAmount
+        );
+
+        if (s_liquidityTokenId != 0) {
+            (
+                uint256 amount0,
+                uint256 amount1
+            ) = calculateVirtPositionReserves();
+
+            uint256 usdToCollateral = (PRECISION * usdAmount) /
+                (PRECISION +
+                    ((((PRECISION * getUsdOraclePrice()) /
+                        getWethOraclePrice()) * 1e12) *
+                        currentLTV() *
+                        amount1) /
+                    PRECISION /
+                    amount0);
+            console.log("usd goes to collateral", usdToCollateral);
+
+            i_aaveV3Pool.supply(
+                i_usdAddress,
+                usdToCollateral,
+                address(this),
+                0
+            );
+
+            i_aaveWTG3.borrowETH(
+                address(i_aaveV3Pool),
+                ((((usdToCollateral * getUsdOraclePrice()) /
+                    getWethOraclePrice()) * 1e12) * currentLTV()) / PRECISION,
+                2,
+                0
+            );
+
+            i_uniswapNFTManager.increaseLiquidity{
+                value: ((((usdToCollateral * getUsdOraclePrice()) /
+                    getWethOraclePrice()) * 1e12) * currentLTV()) / PRECISION
+            }(
+                INonfungiblePositionManager.IncreaseLiquidityParams({
+                    tokenId: s_liquidityTokenId,
+                    amount0Desired: ((((usdToCollateral * getUsdOraclePrice()) /
+                        getWethOraclePrice()) * 1e12) * currentLTV()) /
+                        PRECISION,
+                    amount1Desired: usdAmount - usdToCollateral,
+                    amount0Min: 0,
+                    amount1Min: 0,
+                    deadline: block.timestamp + 2 hours
+                })
+            );
+        } else {
+            s_lowerTickOfOurToken = ((getTick() - 200) / 10) * 10;
+            s_upperTickOfOurToken = ((getTick() + 200) / 10) * 10;
+
+            (
+                uint256 amount0,
+                uint256 amount1
+            ) = calculateVirtPositionReserves();
+
+            uint256 usdToCollateral = (PRECISION * usdAmount) /
+                (PRECISION +
+                    (((((PRECISION * getUsdOraclePrice()) /
+                        getWethOraclePrice()) * 1e12) *
+                        670000000000000000 *
+                        amount1) / PRECISION) /
+                    amount0);
+            console.log("usd goes to collateral", usdToCollateral);
+
+            i_aaveV3Pool.supply(
+                i_usdAddress,
+                usdToCollateral,
+                address(this),
+                0
+            );
+
+            i_aaveWTG3.borrowETH(
+                address(i_aaveV3Pool),
+                ((((usdToCollateral * getUsdOraclePrice()) /
+                    getWethOraclePrice()) * 1e12) * 670000000000000000) /
+                    PRECISION,
+                2,
+                0
+            );
+
+            (uint160 sqrtRatioX96, , , , , , ) = i_uniswapPool.slot0();
+
+            uint128 liquidityMinted = LiquidityAmounts.getLiquidityForAmounts(
+                sqrtRatioX96,
+                s_lowerTickOfOurToken.getSqrtRatioAtTick(),
+                s_upperTickOfOurToken.getSqrtRatioAtTick(),
+                amount0,
+                amount1
+            );
+
+            i_uniswapPool.mint(
+                address(this),
+                s_lowerTickOfOurToken,
+                s_upperTickOfOurToken,
+                liquidityMinted,
+                ""
+            );
+
+            // (s_liquidityTokenId, , , ) = i_uniswapNFTManager.mint{
+            //     value: ((((usdToCollateral * getUsdOraclePrice()) /
+            //         getWethOraclePrice()) * 1e12) * 670000000000000000) /
+            //         PRECISION
+            // }(
+            //     INonfungiblePositionManager.MintParams({
+            //         token0: i_wethAddress,
+            //         token1: i_usdAddress,
+            //         fee: 500,
+            //         tickLower: s_lowerTickOfOurToken,
+            //         tickUpper: s_upperTickOfOurToken,
+            //         amount0Desired: ((((usdToCollateral * getUsdOraclePrice()) /
+            //             getWethOraclePrice()) * 1e12) * 670000000000000000) /
+            //             PRECISION,
+            //         amount1Desired: usdAmount - usdToCollateral,
+            //         amount0Min: 0,
+            //         amount1Min: 0,
+            //         recipient: address(this),
+            //         deadline: block.timestamp + 2 hours
+            //     })
+            // );
+        }
+    }
+
+    // =================================
+    // FallBack
+    // =================================
+
+    receive() external payable {}
+
+    // =================================
+    // View funcitons
+    // =================================
+
+    function currentLTV() public pure returns (uint256) {
+        // return currentETHBorrowed * getWethOraclePrice() / currentUSDInCollateral/getUsdOraclePrice()
+        return 67 * 1e16;
+    }
 
     function sharesWorth(uint256 shares) public view returns (uint256) {
-        return (usdBalance * shares) / totalSupply();
+        return (s_usdBalance * shares) / totalSupply();
     }
 
-    function getTick() public view returns(int24) {
-        (,int24 tick,,,,,) = uniswapPool.slot0();
+    function getTick() public view returns (int24) {
+        (, int24 tick, , , , , ) = i_uniswapPool.slot0();
         return tick;
     }
 
-    function getPrice() public view returns (uint256) {
-        (uint160 sqrtPriceX96,,,,,,) = uniswapPool.slot0();
-        return uint256(sqrtPriceX96) * uint256(sqrtPriceX96) * 1e18 >> (96*2);
+    function getUsdOraclePrice() public view returns (uint256) {
+        return i_aaveOracle.getAssetPrice(i_usdAddress);
     }
 
-    // function getLiquididtyOfToken() public view returns (uint256) {
-    //     (,,,,,uint128 liquididty,,,,) = uniswapPositionNFT.positions(liquididtyTokenId);
-    //     return uint256(liquididty);
-    // }
-
-    // function getLowerAndUpperTicks() public view returns (int24, int24) {
-    //     (,,,,,int24 tickLower,int24 tickUpper,,,,,) = uniswapPositionNFT.positions(liquididtyTokenId);
-    //     return (tickLower, tickUpper);
-    // }
-
-    function calculateBalanceBetweenTokensForRebalance(
-        uint256 _amount
-    ) public view returns (uint256, uint256, uint256, uint256, uint256) {
-        uint256 amount0USD = 0;
-        uint256 amount1USD = 0;
-        uint256 amount0Pool = 0;
-        uint256 amount1Pool = 0;
-
-        int24 currentTick = getTick();
-
-        if (currentTick < lowerTickOfOurToken) {
-            amount0USD = _amount;
-        } else if (currentTick > upperTickOfOurToken) {
-            amount1USD = _amount;
-        } else {
-            amount0Pool = SqrtPriceMath.getAmount0Delta(
-                TickMath.getSqrtRatioAtTick(currentTick),
-                TickMath.getSqrtRatioAtTick(upperTickOfOurToken),
-                1000000000000000000,
-                false
-            );
-            amount1Pool = SqrtPriceMath.getAmount1Delta(
-                TickMath.getSqrtRatioAtTick(lowerTickOfOurToken),
-                TickMath.getSqrtRatioAtTick(currentTick),
-                1000000000000000000,
-                false
-            );
-            amount0USD =
-                ((_amount * amount0Pool * getPrice()) / 1e18) /
-                (amount1Pool + (amount0Pool * getPrice()) / 1e18);
-            amount1USD =
-                (_amount * amount1Pool) /
-                (amount1Pool + (amount0Pool * getPrice()) / 1e18);
-        }
-
-        return (
-            amount0USD,
-            amount1USD,
-            (amount0Pool * getPrice()) / 1e18,
-            amount1Pool,
-            getPrice()
-        );
-    }
-
-    function calculateBalanceBetweenTokensForMint(
-        uint256 _amount
-    ) public returns (uint256, uint256, uint256, uint256, uint256) {
-        uint256 amount0USD = 0;
-        uint256 amount1USD = 0;
-        uint256 amount0Pool = 0;
-        uint256 amount1Pool = 0;
-
-        int24 currentTick = getTick();
-        lowerTickOfOurToken = (currentTick - 200) / 10 * 10;
-        upperTickOfOurToken = (currentTick + 200) / 10 * 10;
-
-        if (currentTick < lowerTickOfOurToken) {
-            amount0USD = _amount;
-        } else if (currentTick > upperTickOfOurToken) {
-            amount1USD = _amount;
-        } else {
-            amount0Pool = SqrtPriceMath.getAmount0Delta(
-                TickMath.getSqrtRatioAtTick(currentTick),
-                TickMath.getSqrtRatioAtTick(upperTickOfOurToken),
-                1000000000000000000,
-                false
-            );
-            amount1Pool = SqrtPriceMath.getAmount1Delta(
-                TickMath.getSqrtRatioAtTick(lowerTickOfOurToken),
-                TickMath.getSqrtRatioAtTick(currentTick),
-                1000000000000000000,
-                false
-            );
-            amount0USD =
-                ((_amount * amount0Pool * getPrice()) / 1e18) /
-                (amount1Pool + (amount0Pool * getPrice()) / 1e18);
-            amount1USD =
-                (_amount * amount1Pool) /
-                (amount1Pool + (amount0Pool * getPrice()) / 1e18);
-        }
-
-        return (
-            amount0USD,
-            amount1USD,
-            (amount0Pool * getPrice()) / 1e18,
-            amount1Pool,
-            getPrice()
-        );
+    function getWethOraclePrice() public view returns (uint256) {
+        return i_aaveOracle.getAssetPrice(i_wethAddress);
     }
 
     function abs(int x) private pure returns (int) {
         return x >= 0 ? x : -x;
     }
 
-    // =================================
-	// Main funciton
-	// =================================
-
-    function addLiqudityToOurPosition(uint256 _amount) public {
-
-        usdBalance += _amount;
-        uint256 sharesToGive = (usdBalance != _amount)
-            ? ((_amount * totalSupply()) / (usdBalance - _amount))
-            : _amount;
-
-        _mint(msg.sender, sharesToGive);
-
-        require(sharesWorth(sharesToGive) <= _amount, "FC0");
-
-        TransferHelper.safeTransferFrom(usd, msg.sender, address(this), _amount);
-
-        if (liquididtyTokenId != 0) {
-
-            (uint256 ethCoef,uint256 usdCoef,,,) = calculateBalanceBetweenTokensForRebalance(_amount);
-
-            aaveV3pool.supply(usd, ethCoef, address(this), 0);
-            uint256 ethAmount = (ethCoef * 1e18 / getPrice()) * 60 / 100;
-            aaveWTG3.borrowETH(address(aaveV3pool), ethAmount, 2, 0);
-
-            (uint128 tempr,,) = uniswapPositionNFT.increaseLiquidity{value: ethAmount}(
-                INonfungiblePositionManager.IncreaseLiquidityParams
-                ({
-                    tokenId: liquididtyTokenId,
-                    amount0Desired: ethAmount,
-                    amount1Desired: usdCoef * 60 / 100,
-                    amount0Min: 0,
-                    amount1Min: 0,
-                    deadline: block.timestamp + 2 hours
-                })
-            );
-            ourLiquidity += tempr;
-
-            // это остаток от транзакции, который надо будет грамотно распределить между бороуингом и прямым депом в пул
-            TransferHelper.safeTransfer(usd, msg.sender, usdCoef * 40 / 100);
-
-        } else {
-
-            (uint256 ethCoef,uint256 usdCoef,,,) = calculateBalanceBetweenTokensForMint(_amount);
-
-            aaveV3pool.supply(usd, ethCoef, address(this), 0);
-            uint256 ethAmount = (ethCoef * 1e18 / getPrice()) * 60 / 100;
-            aaveWTG3.borrowETH(address(aaveV3pool), ethAmount, 2, 0);
-
-            // int24 currectTick = getTick();
-            // lowerTickOfOurToken = (currectTick - 200) / 10 * 10;
-            // upperTickOfOurToken = (currectTick + 200) / 10 * 10;
-
-            (liquididtyTokenId,ourLiquidity,,) = uniswapPositionNFT.mint{value: ethAmount}(
-                INonfungiblePositionManager.MintParams
-                ({
-                    token0: weth,
-                    token1: usd,
-                    fee: 500,
-                    tickLower: lowerTickOfOurToken,
-                    tickUpper: upperTickOfOurToken,
-                    amount0Desired: ethAmount,
-                    amount1Desired: usdCoef * 60 / 100,
-                    amount0Min: 0,
-                    amount1Min: 0,
-                    recipient: address(this),
-                    deadline: block.timestamp + 2 hours
-                })
-            );
-
-            // это остаток от транзакции, который надо будет грамотно распределить между бороуингом и прямым депом в пул
-            TransferHelper.safeTransfer(usd, msg.sender, usdCoef * 40 / 100);
-        }
-        
+    function getLiquidityTokenId() public view returns (uint256) {
+        return s_liquidityTokenId;
     }
 
-    function withdrawLiqudityFromOurPosition(
-        uint256 _shares
-    ) public {
-
-        // console.log("ourLiquidity", ourLiquidity);
-        uint128 liquidity = uint128(ourLiquidity * sharesWorth(_shares) / totalSupply());
-        // console.log("liquidity", liquidity);
-        ourLiquidity -= liquidity;
-
-        (uint256 amount0, uint256 amount1) = uniswapPositionNFT.decreaseLiquidity(
-            INonfungiblePositionManager.DecreaseLiquidityParams({
-                tokenId: liquididtyTokenId,
-                liquidity: liquidity,
-                amount0Min: 0,
-                amount1Min: 0,
-                deadline: block.timestamp + 2 hours
-            })
-        );
-
-        uniswapPositionNFT.collect(
-            INonfungiblePositionManager.CollectParams({
-                tokenId: liquididtyTokenId,
-                recipient: address(0),
-                amount0Max: type(uint128).max,
-                amount1Max: type(uint128).max
-            })
-        );
-
-        uniswapPositionNFT.unwrapWETH9(0, address(this));
-        uniswapPositionNFT.sweepToken(usd, 0, address(this));
-
-        // console.log("amount0", amount0);
-        // console.log("amount1", amount1);
-
-        // console.log("eth balance", address(this).balance);
-        // console.log("usd balance", IERC20(usd).balanceOf(address(this)));
-        // console.log("weth balance", IERC20(weth).balanceOf(address(this)));
-
-        aaveWTG3.repayETH{value: amount0}(address(aaveV3pool), amount0, 2, address(this));
-        // console.log("repay done");
-        uint256 amountToWithdraw = amount0 * getPrice() *  1666 / 1e18 / 1000;
-        // console.log("amountToWithdraw", amountToWithdraw);
-        aaveV3pool.withdraw(usd, amountToWithdraw, address(this));
-
-        uint256 usdToReturn = sharesWorth(_shares);
-        // console.log("usdToReturn", usdToReturn);
-        // console.log("usdToReturn * 80 / 100", usdToReturn * 80 / 100);
-        // console.log("eth balance", address(this).balance);
-        // console.log("usd balance", IERC20(usd).balanceOf(address(this)));
-        // console.log("weth balance", IERC20(weth).balanceOf(address(this)));
-        _burn(msg.sender, _shares);
-        usdBalance -= usdToReturn;
-        console.log(amountToWithdraw + ((usdToReturn - amountToWithdraw) * 60 / 100));
-        console.log(usdToReturn * 80 / 100);
-        TransferHelper.safeTransfer(usd, msg.sender, (usdToReturn * 80 / 100));
+    function getPositionLiquidity() public view returns (uint128) {
+        // (, , , , , , , uint128 liquidity, , , , ) = i_uniswapNFTManager
+        //     .positions(s_liquidityTokenId);
+        // (uint128 liq,,,,)= i_uniswapPool.positions(keccak256(abi.encodePacked(address(this), s_lowerTickOfOurToken, s_upperTickOfOurToken)));
+        // console.log("liquidity", liq);
+        return 9194295139235952;
     }
 
-    function rebalancePosition() public {}
-
-    // =================================
-	// FallBack
-	// =================================
-
-    receive() external payable {}
-
-    // =================================
-	// Constructor
-	// =================================
-
-    constructor(address _usd, address _weth, address _uniswapRouter, address _uniswapPool, address _aaveWTG3, address _aaveV3pool, address _aaveWeth, address _uniswapPositionNFT)
-    ERC20("FirstRebalanceTry", "FRT") 
+    function calculateVirtPositionReserves()
+        public
+        view
+        returns (uint256, uint256)
     {
-        usd = _usd;
-        weth = _weth;
-        uniswapRouter = IV3SwapRouter(_uniswapRouter);
-        uniswapPool = IUniswapV3Pool(_uniswapPool);
-        aaveWTG3 = IWETHGateway(_aaveWTG3);
-        aaveV3pool = IPool(_aaveV3pool);
-        aaveWeth = ICreditDelegationToken(_aaveWeth);
-        uniswapPositionNFT = INonfungiblePositionManager(_uniswapPositionNFT);
+        uint256 amount0 = 0;
+        uint256 amount1 = 0;
+
+        if (getTick() < s_lowerTickOfOurToken) {
+            amount0 = SqrtPriceMath.getAmount0Delta(
+                TickMath.getSqrtRatioAtTick(s_lowerTickOfOurToken),
+                TickMath.getSqrtRatioAtTick(s_upperTickOfOurToken),
+                1000000000000000,
+                false
+            );
+        } else if (getTick() > s_upperTickOfOurToken) {
+            amount1 = SqrtPriceMath.getAmount1Delta(
+                TickMath.getSqrtRatioAtTick(s_lowerTickOfOurToken),
+                TickMath.getSqrtRatioAtTick(s_upperTickOfOurToken),
+                1000000000000000,
+                false
+            );
+        } else {
+            amount0 = SqrtPriceMath.getAmount0Delta(
+                TickMath.getSqrtRatioAtTick(getTick()),
+                TickMath.getSqrtRatioAtTick(s_upperTickOfOurToken),
+                1000000000000000,
+                false
+            );
+            amount1 = SqrtPriceMath.getAmount1Delta(
+                TickMath.getSqrtRatioAtTick(s_lowerTickOfOurToken),
+                TickMath.getSqrtRatioAtTick(getTick()),
+                1000000000000000,
+                false
+            );
+        }
+        return (amount0, amount1);
     }
 
+    function calculateCurrentPositionReserves()
+        public
+        view
+        returns (uint256, uint256)
+    {
+        uint256 amount0 = 0;
+        uint256 amount1 = 0;
+
+        if (getTick() < s_lowerTickOfOurToken) {
+            amount0 = SqrtPriceMath.getAmount0Delta(
+                TickMath.getSqrtRatioAtTick(s_lowerTickOfOurToken),
+                TickMath.getSqrtRatioAtTick(s_upperTickOfOurToken),
+                getPositionLiquidity(),
+                false
+            );
+        } else if (getTick() > s_upperTickOfOurToken) {
+            amount1 = SqrtPriceMath.getAmount1Delta(
+                TickMath.getSqrtRatioAtTick(s_lowerTickOfOurToken),
+                TickMath.getSqrtRatioAtTick(s_upperTickOfOurToken),
+                getPositionLiquidity(),
+                false
+            );
+        } else {
+            amount0 = SqrtPriceMath.getAmount0Delta(
+                TickMath.getSqrtRatioAtTick(getTick()),
+                TickMath.getSqrtRatioAtTick(s_upperTickOfOurToken),
+                getPositionLiquidity(),
+                false
+            );
+            amount1 = SqrtPriceMath.getAmount1Delta(
+                TickMath.getSqrtRatioAtTick(s_lowerTickOfOurToken),
+                TickMath.getSqrtRatioAtTick(getTick()),
+                getPositionLiquidity(),
+                false
+            );
+        }
+        return (amount0, amount1);
+    }
+
+    // =================================
+    // Temporary solution for testing
+    // =================================
+
+    function giveAllApproves() public {
+        TransferHelper.safeApprove(
+            i_usdAddress,
+            address(i_aaveV3Pool),
+            type(uint256).max
+        );
+        TransferHelper.safeApprove(
+            i_usdAddress,
+            address(i_uniswapRouter),
+            type(uint256).max
+        );
+        TransferHelper.safeApprove(
+            i_usdAddress,
+            address(i_uniswapNFTManager),
+            type(uint256).max
+        );
+        TransferHelper.safeApprove(
+            i_usdAddress,
+            address(i_uniswapPool),
+            type(uint256).max
+        );
+        TransferHelper.safeApprove(
+            i_usdAddress,
+            address(i_aaveWTG3),
+            type(uint256).max
+        );
+        TransferHelper.safeApprove(
+            i_usdAddress,
+            address(i_aaveWeth),
+            type(uint256).max
+        );
+
+        TransferHelper.safeApprove(
+            i_wethAddress,
+            address(i_aaveWTG3),
+            type(uint256).max
+        );
+        TransferHelper.safeApprove(
+            i_wethAddress,
+            address(i_uniswapRouter),
+            type(uint256).max
+        );
+        TransferHelper.safeApprove(
+            i_wethAddress,
+            address(i_uniswapNFTManager),
+            type(uint256).max
+        );
+        TransferHelper.safeApprove(
+            i_wethAddress,
+            address(i_uniswapPool),
+            type(uint256).max
+        );
+        TransferHelper.safeApprove(
+            i_wethAddress,
+            address(i_aaveWTG3),
+            type(uint256).max
+        );
+        TransferHelper.safeApprove(
+            i_wethAddress,
+            address(i_aaveWeth),
+            type(uint256).max
+        );
+
+        i_aaveWeth.approveDelegation(address(i_aaveWTG3), type(uint256).max);
+    }
 }

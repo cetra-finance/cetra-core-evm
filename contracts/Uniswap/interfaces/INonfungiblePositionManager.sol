@@ -5,11 +5,11 @@ pragma abicoder v2;
 import '@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol';
 import '@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol';
 
-import './IforManager/IPoolInitializer.sol';
-import './IforManager/IERC721Permit.sol';
-import './IforManager/IPeripheryPayments.sol';
-import './IforManager/IPeripheryImmutableState.sol';
-import './IforManager/PoolAddress.sol';
+import '../IforManager/IPoolInitializer.sol';
+import '../IforManager/IERC721Permit.sol';
+import '../IforManager/IPeripheryPayments.sol';
+import '../IforManager/IPeripheryImmutableState.sol';
+import '../IforManager/PoolAddress.sol';
 
 /// @title Non-fungible token for positions
 /// @notice Wraps Uniswap V3 positions in a non-fungible token interface which allows for them to be transferred

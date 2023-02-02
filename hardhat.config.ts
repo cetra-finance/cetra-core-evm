@@ -21,9 +21,10 @@ module.exports = {
     defaultNetwork: "hardhat",
     networks: {
         hardhat: {
+            chainId: 31337,
            forking: {
                url: CUSTOM_RPC_URL,
-            //    blockNumber: 69171202
+                blockNumber: 69171202
            }
         }
     },
@@ -41,19 +42,16 @@ module.exports = {
     },
     solidity: {
         compilers: [
-            {
-                version: "0.8.17",
+           {
+            version: "0.8.17",
             },
             {
-               version: "0.8.10",
-           },
-           {
-            version: "0.8.0",
+            version: "0.8.10",
             }
         ],
         settings: {
            optimizer: {
-             runs: 1000,
+             runs: 200,
              enabled: true
            }
          }
@@ -63,7 +61,7 @@ module.exports = {
     },
     gasReporter: {
       enabled: false,
-      gasPrice: 1,
+      gasPrice: 10,
       currency: 'USD',
       coinmarketcap: '2f0fe43a-0f3d-40a6-8558-ddd3625bfd6b',
    }
