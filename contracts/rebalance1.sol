@@ -30,7 +30,7 @@ contract Rebalance1 is ERC20 {
     uint256 private s_usdBalance;
     int24 private s_lowerTickOfOurToken;
     int24 private s_upperTickOfOurToken;
-    uint256 private s_liquidityTokenId;
+    bool private s_liquidityTokenId;
 
     // =================================
     // Storage for logic
@@ -87,16 +87,18 @@ contract Rebalance1 is ERC20 {
     }
 
     // =================================
-    // Main funciton
+    // Mint
     // =================================
 
-    function mint(uint256 usdAmount) public {
+    function mintLiquidity(uint256 usdAmount) public {
+
         s_usdBalance += usdAmount;
         uint256 sharesToMint = (s_usdBalance != usdAmount)
             ? ((usdAmount * totalSupply()) / (s_usdBalance - usdAmount))
             : usdAmount;
         _mint(msg.sender, sharesToMint);
         require(sharesWorth(sharesToMint) <= usdAmount, "FC0");
+
         TransferHelper.safeTransferFrom(
             i_usdAddress,
             msg.sender,
@@ -104,7 +106,7 @@ contract Rebalance1 is ERC20 {
             usdAmount
         );
 
-        if (s_liquidityTokenId != 0) {
+        if (!s_liquidityTokenId) {
             (
                 uint256 amount0,
                 uint256 amount1
@@ -135,21 +137,27 @@ contract Rebalance1 is ERC20 {
                 0
             );
 
-            i_uniswapNFTManager.increaseLiquidity{
-                value: ((((usdToCollateral * getUsdOraclePrice()) /
-                    getWethOraclePrice()) * 1e12) * currentLTV()) / PRECISION
-            }(
-                INonfungiblePositionManager.IncreaseLiquidityParams({
-                    tokenId: s_liquidityTokenId,
-                    amount0Desired: ((((usdToCollateral * getUsdOraclePrice()) /
-                        getWethOraclePrice()) * 1e12) * currentLTV()) /
-                        PRECISION,
-                    amount1Desired: usdAmount - usdToCollateral,
-                    amount0Min: 0,
-                    amount1Min: 0,
-                    deadline: block.timestamp + 2 hours
-                })
+            (uint160 sqrtRatioX96, , , , , , ) = i_uniswapPool.slot0();
+
+            uint128 liquidityMinted = LiquidityAmounts.getLiquidityForAmounts(
+                sqrtRatioX96,
+                s_lowerTickOfOurToken.getSqrtRatioAtTick(),
+                s_upperTickOfOurToken.getSqrtRatioAtTick(),
+                amount0,
+                amount1
             );
+
+            (bool success, ) = i_wethAddress.call{value: address(this).balance}(abi.encodeWithSignature("deposit"));
+            require(success, "FC1");
+
+            i_uniswapPool.mint(
+                address(this),
+                s_lowerTickOfOurToken,
+                s_upperTickOfOurToken,
+                liquidityMinted,
+                ""
+            );
+
         } else {
             s_lowerTickOfOurToken = ((getTick() - 200) / 10) * 10;
             s_upperTickOfOurToken = ((getTick() + 200) / 10) * 10;
@@ -194,6 +202,25 @@ contract Rebalance1 is ERC20 {
                 amount1
             );
 
+            // console.log('amount0', amount0);
+            // console.log('amount1', amount1);
+            // console.log("eth balance", address(this).balance);
+            // console.log("usd balance", IERC20(i_usdAddress).balanceOf(address(this)));
+            // console.log("weth balance", IERC20(i_wethAddress).balanceOf(address(this)));
+
+            // console.log("----------------");
+
+            (bool success, ) = i_wethAddress.call{value: address(this).balance}(abi.encodeWithSignature("deposit"));
+            require(success, "FC1");
+
+            // console.log('amount0', amount0);
+            // console.log('amount1', amount1);
+            // console.log("eth balance", address(this).balance);
+            // console.log("usd balance", IERC20(i_usdAddress).balanceOf(address(this)));
+            // console.log("weth balance", IERC20(i_wethAddress).balanceOf(address(this)));
+
+            console.log("liquidity minted", liquidityMinted);
+
             i_uniswapPool.mint(
                 address(this),
                 s_lowerTickOfOurToken,
@@ -202,35 +229,43 @@ contract Rebalance1 is ERC20 {
                 ""
             );
 
-            // (s_liquidityTokenId, , , ) = i_uniswapNFTManager.mint{
-            //     value: ((((usdToCollateral * getUsdOraclePrice()) /
-            //         getWethOraclePrice()) * 1e12) * 670000000000000000) /
-            //         PRECISION
-            // }(
-            //     INonfungiblePositionManager.MintParams({
-            //         token0: i_wethAddress,
-            //         token1: i_usdAddress,
-            //         fee: 500,
-            //         tickLower: s_lowerTickOfOurToken,
-            //         tickUpper: s_upperTickOfOurToken,
-            //         amount0Desired: ((((usdToCollateral * getUsdOraclePrice()) /
-            //             getWethOraclePrice()) * 1e12) * 670000000000000000) /
-            //             PRECISION,
-            //         amount1Desired: usdAmount - usdToCollateral,
-            //         amount0Min: 0,
-            //         amount1Min: 0,
-            //         recipient: address(this),
-            //         deadline: block.timestamp + 2 hours
-            //     })
-            // );
+            s_liquidityTokenId = true;
+
         }
+
+        (uint256 liquidAtPosition,,,,) = i_uniswapPool.positions(keccak256(abi.encodePacked(address(this), s_lowerTickOfOurToken, s_upperTickOfOurToken)));
+        console.log("liquidAtPosition", liquidAtPosition);
     }
+
+    function uniswapV3MintCallback(
+        uint256 amount0Owed,
+        uint256 amount1Owed,
+        bytes calldata /*_data*/
+    ) external {
+        require(msg.sender == address(i_uniswapPool), "callback caller");
+
+        // console.log("amount0Owed", amount0Owed);
+        // console.log("amount1Owed", amount1Owed);
+
+        if (amount0Owed > 0) TransferHelper.safeTransfer(i_wethAddress, msg.sender, amount0Owed);
+        if (amount1Owed > 0) TransferHelper.safeTransfer(i_usdAddress, msg.sender, amount1Owed);
+    }
+
+    // =================================
+    // Withdraw
+    // =================================
+
+    // function withdraw (
+    //     uint256 _shares
+    // ) public {}
 
     // =================================
     // FallBack
     // =================================
 
     receive() external payable {}
+
+    fallback() external payable {}
 
     // =================================
     // View funcitons

@@ -77,18 +77,18 @@ describe("Basic tests new", function () {
         );
     });
 
-    it("full circuit test new", async function () {
+    it("full circuit mint", async function () {
         console.log("OWNER DEPOSITS 1000000000");
-        await ourRebalance.connect(owner).mint(1000 * 1000 * 1000);
+        await ourRebalance.connect(owner).mintLiquidity(1000 * 1000 * 1000);
         console.log(await ourRebalance.calculateVirtPositionReserves());
         console.log("USER1 DEPOSITS 1500000000");
-        await ourRebalance.connect(user1).mint(1500 * 1000 * 1000);
+        await ourRebalance.connect(user1).mintLiquidity(1500 * 1000 * 1000);
         console.log("USER2 DEPOSITS 2500000000");
-        await ourRebalance.connect(user2).mint(2500 * 1000 * 1000);
+        await ourRebalance.connect(user2).mintLiquidity(2500 * 1000 * 1000);
         console.log("USER2 DEPOSITS 2500000000");
-        await ourRebalance.connect(user2).mint(2500 * 1000 * 1000);
+        await ourRebalance.connect(user2).mintLiquidity(2500 * 1000 * 1000);
         console.log("USER1 DEPOSITS 1500000000");
-        await ourRebalance.connect(user1).mint(1500 * 1000 * 1000);
+        await ourRebalance.connect(user1).mintLiquidity(1500 * 1000 * 1000);
 
         let positionId = await ourRebalance.getLiquidityTokenId();
         let position = await uniPositionManager.positions(positionId);
@@ -126,6 +126,12 @@ describe("Basic tests new", function () {
         console.log(await ourRebalance.calculateCurrentPositionReserves());
         console.log("-----------------------------------------------------");
     });
+
+    // it("full circuit withdraw", async function () {
+    //     let user1Bal = await ourRebalance.balanceOf(owner.address)
+    //     console.log(user1Bal);
+    //     await ourRebalance.connect(owner).withdraw(user1Bal);
+    // })
 });
 
 // 205922298
