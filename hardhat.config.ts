@@ -10,6 +10,7 @@ require("hardhat-deploy");
 require("@nomicfoundation/hardhat-network-helpers");
 require("hardhat-gas-reporter");
 require('hardhat-contract-sizer');
+require("hardhat-tracer");
 
 require("dotenv").config();
 
@@ -24,7 +25,7 @@ module.exports = {
             chainId: 31337,
            forking: {
                url: CUSTOM_RPC_URL,
-                blockNumber: 69171202
+                blockNumber: 38932061
            }
         }
     },

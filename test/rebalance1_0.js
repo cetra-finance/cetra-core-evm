@@ -16,7 +16,7 @@ describe("Basic tests new", function () {
         user1 = accounts[1];
         user2 = accounts[2];
 
-        usd = await ethers.getContractAt("ERC20", currNetworkConfig.usdAddress);
+        usd = await ethers.getContractAt("ERC20", currNetworkConfig.usdcAddress);
         weth = await ethers.getContractAt(
             "ERC20",
             currNetworkConfig.wethAddress
@@ -28,13 +28,14 @@ describe("Basic tests new", function () {
 
         const OurRebalance = await ethers.getContractFactory("Rebalance1");
         ourRebalance = await OurRebalance.deploy(
-            currNetworkConfig.usdAddress,
+            currNetworkConfig.usdcAddress,
             currNetworkConfig.wethAddress,
+            currNetworkConfig.wmaticAddress,
             currNetworkConfig.uniswapRouterAddress,
             currNetworkConfig.uniswapPoolAddress,
             currNetworkConfig.aaveWTG3Address,
             currNetworkConfig.aaveV3PoolAddress,
-            currNetworkConfig.aaveVWETHAddress,
+            currNetworkConfig.aaveVMATICAddress,
             currNetworkConfig.aaveOracleAddress,
             currNetworkConfig.uniswapNFTManagerAddress
             //currNetworkConfig.targetLTV
@@ -43,10 +44,10 @@ describe("Basic tests new", function () {
         await ourRebalance.deployed();
 
         await helpers.impersonateAccount(
-            "0xebe80f029b1c02862b9e8a70a7e5317c06f62cae"
+            "0xe7804c37c13166fF0b37F5aE0BB07A3aEbb6e245"
         );
         let donorWallet = await ethers.getSigner(
-            "0xebe80f029b1c02862b9e8a70a7e5317c06f62cae"
+            "0xe7804c37c13166fF0b37F5aE0BB07A3aEbb6e245"
         );
 
         await usd
@@ -78,22 +79,22 @@ describe("Basic tests new", function () {
     });
 
     it("full circuit mint", async function () {
-        console.log("OWNER DEPOSITS 1000000000");
+        console.log("OWNER DEPOSITS 1000$");
         await ourRebalance.connect(owner).mintLiquidity(1000 * 1000 * 1000);
         console.log(await ourRebalance.calculateVirtPositionReserves());
-        console.log("USER1 DEPOSITS 1500000000");
+        console.log("USER1 DEPOSITS 1500$");
         await ourRebalance.connect(user1).mintLiquidity(1500 * 1000 * 1000);
-        console.log("USER2 DEPOSITS 2500000000");
+        console.log("USER2 DEPOSITS 2500$");
         await ourRebalance.connect(user2).mintLiquidity(2500 * 1000 * 1000);
-        console.log("USER2 DEPOSITS 2500000000");
+        console.log("USER2 DEPOSITS 2500$");
         await ourRebalance.connect(user2).mintLiquidity(2500 * 1000 * 1000);
-        console.log("USER1 DEPOSITS 1500000000");
+        console.log("USER1 DEPOSITS 1500$");
         await ourRebalance.connect(user1).mintLiquidity(1500 * 1000 * 1000);
 
-        let positionId = await ourRebalance.getLiquidityTokenId();
-        let position = await uniPositionManager.positions(positionId);
-        console.log("The uniswap position is");
-        console.log(position);
+        // let positionId = await ourRebalance.getLiquidityTokenId();
+        // let position = await uniPositionManager.positions(positionId);
+        // console.log("The uniswap position is");
+        // console.log(position);
 
         console.log(
             `Total amount of shares minted is ${await ourRebalance.totalSupply()}`

@@ -42,9 +42,10 @@ contract Rebalance1 is ERC20 {
 
     address private immutable i_usdAddress;
     address private immutable i_wethAddress;
+    address private immutable i_wmaticAddress;
 
     IAaveOracle private immutable i_aaveOracle;
-    ICreditDelegationToken private immutable i_aaveWeth;
+    ICreditDelegationToken private immutable i_aaveWmatic;
     IWETHGateway private immutable i_aaveWTG3;
     IPool private immutable i_aaveV3Pool;
 
@@ -61,6 +62,7 @@ contract Rebalance1 is ERC20 {
     constructor(
         address _usdAddress,
         address _wethAddress,
+        address _wmaticAddress,
         address _uniswapRouterAddress,
         address _uniswapPoolAddress,
         address _aaveWTG3Address,
@@ -74,11 +76,12 @@ contract Rebalance1 is ERC20 {
     {
         i_usdAddress = _usdAddress;
         i_wethAddress = _wethAddress;
+        i_wmaticAddress = _wmaticAddress;
         i_uniswapRouter = IV3SwapRouter(_uniswapRouterAddress);
         i_uniswapPool = IUniswapV3Pool(_uniswapPoolAddress);
         i_aaveWTG3 = IWETHGateway(_aaveWTG3Address);
         i_aaveV3Pool = IPool(_aaveV3poolAddress);
-        i_aaveWeth = ICreditDelegationToken(_aaveVWETHAddress);
+        i_aaveWmatic = ICreditDelegationToken(_aaveVWETHAddress);
         i_aaveOracle = IAaveOracle(_aaveOracleAddress);
         i_uniswapNFTManager = INonfungiblePositionManager(
             _uniswapNFTManagerAddress
@@ -106,91 +109,94 @@ contract Rebalance1 is ERC20 {
             usdAmount
         );
 
-        if (!s_liquidityTokenId) {
-            (
-                uint256 amount0,
-                uint256 amount1
-            ) = calculateVirtPositionReserves();
-
-            uint256 usdToCollateral = (PRECISION * usdAmount) /
-                (PRECISION +
-                    ((((PRECISION * getUsdOraclePrice()) /
-                        getWethOraclePrice()) * 1e12) *
-                        currentLTV() *
-                        amount1) /
-                    PRECISION /
-                    amount0);
-            console.log("usd goes to collateral", usdToCollateral);
-
-            i_aaveV3Pool.supply(
+        i_aaveV3Pool.supply(
                 i_usdAddress,
-                usdToCollateral,
+                usdAmount,
                 address(this),
                 0
             );
 
-            i_aaveWTG3.borrowETH(
-                address(i_aaveV3Pool),
-                ((((usdToCollateral * getUsdOraclePrice()) /
-                    getWethOraclePrice()) * 1e12) * currentLTV()) / PRECISION,
-                2,
-                0
-            );
+        if (s_liquidityTokenId) {
+            // (
+            //     uint256 amount0,
+            //     uint256 amount1
+            // ) = calculateVirtPositionReserves();
 
-            (uint160 sqrtRatioX96, , , , , , ) = i_uniswapPool.slot0();
+            // uint256 usdToCollateral = (PRECISION * usdAmount) /
+            //     (PRECISION +
+            //         ((((PRECISION * getUsdOraclePrice()) /
+            //             getWethOraclePrice()) * 1e12) *
+            //             currentLTV() *
+            //             amount1) /
+            //         PRECISION /
+            //         amount0);
+            // console.log("usd goes to collateral", usdToCollateral);
 
-            uint128 liquidityMinted = LiquidityAmounts.getLiquidityForAmounts(
-                sqrtRatioX96,
-                s_lowerTickOfOurToken.getSqrtRatioAtTick(),
-                s_upperTickOfOurToken.getSqrtRatioAtTick(),
-                amount0,
-                amount1
-            );
+            // i_aaveV3Pool.supply(
+            //     i_usdAddress,
+            //     usdToCollateral,
+            //     address(this),
+            //     0
+            // );
 
-            (bool success, ) = i_wethAddress.call{value: address(this).balance}(abi.encodeWithSignature("deposit"));
-            require(success, "FC1");
+            // i_aaveWTG3.borrowETH(
+            //     address(i_aaveV3Pool),
+            //     ((((usdToCollateral * getUsdOraclePrice()) /
+            //         getWethOraclePrice()) * 1e12) * currentLTV()) / PRECISION,
+            //     2,
+            //     0
+            // );
 
-            i_uniswapPool.mint(
-                address(this),
-                s_lowerTickOfOurToken,
-                s_upperTickOfOurToken,
-                liquidityMinted,
-                ""
-            );
+            // (uint160 sqrtRatioX96, , , , , , ) = i_uniswapPool.slot0();
+
+            // uint128 liquidityMinted = LiquidityAmounts.getLiquidityForAmounts(
+            //     sqrtRatioX96,
+            //     s_lowerTickOfOurToken.getSqrtRatioAtTick(),
+            //     s_upperTickOfOurToken.getSqrtRatioAtTick(),
+            //     amount0,
+            //     amount1
+            // );
+
+            // (bool success, ) = i_wethAddress.call{value: address(this).balance}(abi.encodeWithSignature("deposit"));
+            // require(success, "FC1");
+
+            // i_uniswapPool.mint(
+            //     address(this),
+            //     s_lowerTickOfOurToken,
+            //     s_upperTickOfOurToken,
+            //     liquidityMinted,
+            //     ""
+            // );
 
         } else {
             s_lowerTickOfOurToken = ((getTick() - 200) / 10) * 10;
             s_upperTickOfOurToken = ((getTick() + 200) / 10) * 10;
 
-            (
-                uint256 amount0,
-                uint256 amount1
-            ) = calculateVirtPositionReserves();
-
-            uint256 usdToCollateral = (PRECISION * usdAmount) /
-                (PRECISION +
-                    (((((PRECISION * getUsdOraclePrice()) /
-                        getWethOraclePrice()) * 1e12) *
-                        670000000000000000 *
-                        amount1) / PRECISION) /
-                    amount0);
-            console.log("usd goes to collateral", usdToCollateral);
-
-            i_aaveV3Pool.supply(
-                i_usdAddress,
-                usdToCollateral,
-                address(this),
-                0
-            );
+            uint256 maticToBorrow = ((((usdAmount * 30 / 100) * getUsdOraclePrice()) /
+                    getMaticOraclePrice()) * 1e12 * 1e18) / PRECISION;
 
             i_aaveWTG3.borrowETH(
                 address(i_aaveV3Pool),
-                ((((usdToCollateral * getUsdOraclePrice()) /
-                    getWethOraclePrice()) * 1e12) * 670000000000000000) /
-                    PRECISION,
+                maticToBorrow,
                 2,
                 0
             );
+
+            uint256 wethToBorrow = ((((usdAmount * 30 / 100) * getUsdOraclePrice()) /
+                    getWethOraclePrice()) * 1e12 * 1e18) / PRECISION;
+
+            i_aaveV3Pool.borrow(
+                i_wethAddress,
+                wethToBorrow,
+                2,
+                0,
+                address(this)
+                );
+
+            // (
+            //     uint256 amount0,
+            //     uint256 amount1
+            // ) = calculateVirtPositionReserves();
 
             (uint160 sqrtRatioX96, , , , , , ) = i_uniswapPool.slot0();
 
@@ -198,28 +204,32 @@ contract Rebalance1 is ERC20 {
                 sqrtRatioX96,
                 s_lowerTickOfOurToken.getSqrtRatioAtTick(),
                 s_upperTickOfOurToken.getSqrtRatioAtTick(),
-                amount0,
-                amount1
+                maticToBorrow,
+                wethToBorrow
             );
 
-            // console.log('amount0', amount0);
-            // console.log('amount1', amount1);
-            // console.log("eth balance", address(this).balance);
-            // console.log("usd balance", IERC20(i_usdAddress).balanceOf(address(this)));
-            // console.log("weth balance", IERC20(i_wethAddress).balanceOf(address(this)));
+            console.log('wethToBorrow', wethToBorrow);
+            console.log('maticToBorrow', maticToBorrow);
+            console.log("matic balance", address(this).balance);
+            console.log("usd balance", IERC20(i_usdAddress).balanceOf(address(this)));
+            console.log("weth balance", IERC20(i_wethAddress).balanceOf(address(this)));
+            console.log("wmatic balance", IERC20(i_wmaticAddress).balanceOf(address(this)));
 
-            // console.log("----------------");
+            console.log("----------------");
 
-            (bool success, ) = i_wethAddress.call{value: address(this).balance}(abi.encodeWithSignature("deposit"));
+            (bool success, ) = i_wmaticAddress.call{value: address(this).balance}(abi.encodeWithSignature("deposit"));
             require(success, "FC1");
 
-            // console.log('amount0', amount0);
-            // console.log('amount1', amount1);
-            // console.log("eth balance", address(this).balance);
-            // console.log("usd balance", IERC20(i_usdAddress).balanceOf(address(this)));
-            // console.log("weth balance", IERC20(i_wethAddress).balanceOf(address(this)));
+            console.log('wethToBorrow', wethToBorrow);
+            console.log('maticToBorrow', maticToBorrow);
+            console.log("matic balance", address(this).balance);
+            console.log("usd balance", IERC20(i_usdAddress).balanceOf(address(this)));
+            console.log("weth balance", IERC20(i_wethAddress).balanceOf(address(this)));
+            console.log("wmatic balance", IERC20(i_wmaticAddress).balanceOf(address(this)));
 
             console.log("liquidity minted", liquidityMinted);
+            console.logInt(s_lowerTickOfOurToken);
+            console.logInt(s_upperTickOfOurToken);
 
             i_uniswapPool.mint(
                 address(this),
@@ -228,6 +238,13 @@ contract Rebalance1 is ERC20 {
                 liquidityMinted,
                 ""
             );
+            
+            console.log("----------------");
+
+            console.log("matic balance", address(this).balance);
+            console.log("usd balance", IERC20(i_usdAddress).balanceOf(address(this)));
+            console.log("weth balance", IERC20(i_wethAddress).balanceOf(address(this)));
+            console.log("wmatic balance", IERC20(i_wmaticAddress).balanceOf(address(this)));
 
             s_liquidityTokenId = true;
 
@@ -244,8 +261,8 @@ contract Rebalance1 is ERC20 {
     ) external {
         require(msg.sender == address(i_uniswapPool), "callback caller");
 
-        // console.log("amount0Owed", amount0Owed);
-        // console.log("amount1Owed", amount1Owed);
+        console.log("amount0Owed", amount0Owed);
+        console.log("amount1Owed", amount1Owed);
 
         if (amount0Owed > 0) TransferHelper.safeTransfer(i_wethAddress, msg.sender, amount0Owed);
         if (amount1Owed > 0) TransferHelper.safeTransfer(i_usdAddress, msg.sender, amount1Owed);
@@ -265,7 +282,7 @@ contract Rebalance1 is ERC20 {
 
     receive() external payable {}
 
-    fallback() external payable {}
+    // fallback() external payable {}
 
     // =================================
     // View funcitons
@@ -273,7 +290,7 @@ contract Rebalance1 is ERC20 {
 
     function currentLTV() public pure returns (uint256) {
         // return currentETHBorrowed * getWethOraclePrice() / currentUSDInCollateral/getUsdOraclePrice()
-        return 67 * 1e16;
+        return 100 * 1e16;
     }
 
     function sharesWorth(uint256 shares) public view returns (uint256) {
@@ -293,11 +310,15 @@ contract Rebalance1 is ERC20 {
         return i_aaveOracle.getAssetPrice(i_wethAddress);
     }
 
+    function getMaticOraclePrice() public view returns (uint256) {
+        return i_aaveOracle.getAssetPrice(i_wmaticAddress);
+    }
+
     function abs(int x) private pure returns (int) {
         return x >= 0 ? x : -x;
     }
 
-    function getLiquidityTokenId() public view returns (uint256) {
+    function getLiquidityTokenId() public view returns (bool) {
         return s_liquidityTokenId;
     }
 
@@ -419,7 +440,7 @@ contract Rebalance1 is ERC20 {
         );
         TransferHelper.safeApprove(
             i_usdAddress,
-            address(i_aaveWeth),
+            address(i_aaveWmatic),
             type(uint256).max
         );
 
@@ -450,10 +471,41 @@ contract Rebalance1 is ERC20 {
         );
         TransferHelper.safeApprove(
             i_wethAddress,
-            address(i_aaveWeth),
+            address(i_aaveWmatic),
+            type(uint256).max
+        );  
+
+        TransferHelper.safeApprove(
+            i_wmaticAddress,
+            address(i_aaveWTG3),
             type(uint256).max
         );
+        TransferHelper.safeApprove(
+            i_wmaticAddress,
+            address(i_uniswapRouter),
+            type(uint256).max
+        );
+        TransferHelper.safeApprove(
+            i_wmaticAddress,
+            address(i_uniswapNFTManager),
+            type(uint256).max
+        );
+        TransferHelper.safeApprove(
+            i_wmaticAddress,
+            address(i_uniswapPool),
+            type(uint256).max
+        );
+        TransferHelper.safeApprove(
+            i_wmaticAddress,
+            address(i_aaveWTG3),
+            type(uint256).max
+        );
+        TransferHelper.safeApprove(
+            i_wmaticAddress,
+            address(i_aaveWmatic),
+            type(uint256).max
+        );  
 
-        i_aaveWeth.approveDelegation(address(i_aaveWTG3), type(uint256).max);
+        i_aaveWmatic.approveDelegation(address(i_aaveWTG3), type(uint256).max);
     }
 }
