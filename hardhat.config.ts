@@ -25,7 +25,7 @@ module.exports = {
             chainId: 31337,
            forking: {
                url: CUSTOM_RPC_URL,
-                blockNumber: 38932061
+                blockNumber: 38980835
            }
         }
     },
@@ -52,7 +52,7 @@ module.exports = {
         ],
         settings: {
            optimizer: {
-             runs: 200,
+             runs: 1000,
              enabled: true
            }
          }
@@ -61,7 +61,7 @@ module.exports = {
         timeout: 10000000,
     },
     gasReporter: {
-      enabled: false,
+      enabled: true,
       gasPrice: 10,
       currency: 'USD',
       coinmarketcap: '2f0fe43a-0f3d-40a6-8558-ddd3625bfd6b',

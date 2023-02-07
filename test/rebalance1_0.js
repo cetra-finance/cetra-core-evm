@@ -6,7 +6,7 @@ const helpers = require("@nomicfoundation/hardhat-network-helpers");
 
 describe("Basic tests new", function () {
     let owner, _, user1, user2;
-    let ourRebalance, usd, weth, uniPositionManager;
+    let usd, weth;
 
     before(async () => {
         console.log("DEPLOYING VAULT, FUNDING USER ACCOUNTS...");
@@ -15,39 +15,40 @@ describe("Basic tests new", function () {
         owner = accounts[0];
         user1 = accounts[1];
         user2 = accounts[2];
-
-        usd = await ethers.getContractAt("ERC20", currNetworkConfig.usdcAddress);
+        usd = await ethers.getContractAt(
+            "ERC20",
+            currNetworkConfig.usdcAddress
+        );
         weth = await ethers.getContractAt(
             "ERC20",
             currNetworkConfig.wethAddress
         );
-        uniPositionManager = await ethers.getContractAt(
-            "INonfungiblePositionManager",
-            currNetworkConfig.uniswapNFTManagerAddress
+        wmatic = await ethers.getContractAt(
+            "ERC20",
+            currNetworkConfig.wmaticAddress
         );
-
-        const OurRebalance = await ethers.getContractFactory("Rebalance1");
-        ourRebalance = await OurRebalance.deploy(
-            currNetworkConfig.usdcAddress,
-            currNetworkConfig.wethAddress,
-            currNetworkConfig.wmaticAddress,
+        const chamberFactory = await ethers.getContractFactory("ChamberV1");
+        chamber = await chamberFactory.deploy(
             currNetworkConfig.uniswapRouterAddress,
             currNetworkConfig.uniswapPoolAddress,
             currNetworkConfig.aaveWTG3Address,
             currNetworkConfig.aaveV3PoolAddress,
-            currNetworkConfig.aaveVMATICAddress,
+            currNetworkConfig.aaveVWETHAddress,
+            currNetworkConfig.aaveVWMATICAddress,
             currNetworkConfig.aaveOracleAddress,
-            currNetworkConfig.uniswapNFTManagerAddress
-            //currNetworkConfig.targetLTV
+            currNetworkConfig.aaveAUSDCAddress
         );
-        
-        await ourRebalance.deployed();
+        await chamber.setLTV(
+            currNetworkConfig.targetLTV,
+            currNetworkConfig.minLTV,
+            currNetworkConfig.maxLTV
+        );
 
-        await helpers.impersonateAccount(
-            "0xe7804c37c13166fF0b37F5aE0BB07A3aEbb6e245"
-        );
+        await chamber.deployed();
+
+        await helpers.impersonateAccount(currNetworkConfig.donorWalletAddress);
         let donorWallet = await ethers.getSigner(
-            "0xe7804c37c13166fF0b37F5aE0BB07A3aEbb6e245"
+            currNetworkConfig.donorWalletAddress
         );
 
         await usd
@@ -62,15 +63,15 @@ describe("Basic tests new", function () {
 
         await usd
             .connect(owner)
-            .approve(ourRebalance.address, 1000 * 1000 * 1000 * 1000 * 1000);
+            .approve(chamber.address, 1000 * 1000 * 1000 * 1000 * 1000);
         await usd
             .connect(user1)
-            .approve(ourRebalance.address, 1000 * 1000 * 1000 * 1000 * 1000);
+            .approve(chamber.address, 1000 * 1000 * 1000 * 1000 * 1000);
         await usd
             .connect(user2)
-            .approve(ourRebalance.address, 1000 * 1000 * 1000 * 1000 * 1000);
+            .approve(chamber.address, 1000 * 1000 * 1000 * 1000 * 1000);
 
-        await ourRebalance.connect(owner).giveAllApproves();
+        await chamber.connect(owner).giveAllApproves();
 
         console.log(`Owner's address is ${owner.address}`);
         console.log(
@@ -78,62 +79,99 @@ describe("Basic tests new", function () {
         );
     });
 
-    it("full circuit mint", async function () {
+    it("full circuit of mints", async function () {
         console.log("OWNER DEPOSITS 1000$");
-        await ourRebalance.connect(owner).mintLiquidity(1000 * 1000 * 1000);
-        console.log(await ourRebalance.calculateVirtPositionReserves());
+        await chamber.connect(owner).mint(1000 * 1000 * 1000);
+        console.log("LTV IS");
+        console.log(await chamber.currentLTV());
+        console.log("IN POOL");
+        console.log(await chamber.calculateCurrentPositionReserves());
         console.log("USER1 DEPOSITS 1500$");
-        await ourRebalance.connect(user1).mintLiquidity(1500 * 1000 * 1000);
+        await chamber.connect(user1).mint(1500 * 1000 * 1000);
+        console.log("LTV IS");
+        console.log(await chamber.currentLTV());
         console.log("USER2 DEPOSITS 2500$");
-        await ourRebalance.connect(user2).mintLiquidity(2500 * 1000 * 1000);
+        await chamber.connect(user2).mint(2500 * 1000 * 1000);
+        console.log("LTV IS");
+        console.log(await chamber.currentLTV());
         console.log("USER2 DEPOSITS 2500$");
-        await ourRebalance.connect(user2).mintLiquidity(2500 * 1000 * 1000);
+        await chamber.connect(user2).mint(2500 * 1000 * 1000);
+        console.log("LTV IS");
+        console.log(await chamber.currentLTV());
         console.log("USER1 DEPOSITS 1500$");
-        await ourRebalance.connect(user1).mintLiquidity(1500 * 1000 * 1000);
-
-        // let positionId = await ourRebalance.getLiquidityTokenId();
-        // let position = await uniPositionManager.positions(positionId);
-        // console.log("The uniswap position is");
-        // console.log(position);
+        await chamber.connect(user1).mint(1500 * 1000 * 1000);
+        console.log("LTV IS");
+        console.log(await chamber.currentLTV());
 
         console.log(
-            `Total amount of shares minted is ${await ourRebalance.totalSupply()}`
+            `Total amount of shares minted is ${await chamber.s_totalDeposits()}`
         );
         console.log("BALANCE AND SHARESWORTH OF OWNER are");
-        console.log(await ourRebalance.balanceOf(owner.address));
+        console.log(await chamber.s_userDeposits(owner.address));
         console.log(
-            await ourRebalance.sharesWorth(
-                await ourRebalance.balanceOf(owner.address)
-            )
+            await chamber.sharesWorth(await chamber.s_userDeposits(owner.address))
         );
         console.log("BALANCE AND SHARESWORTH OF USER1 are");
-        console.log(await ourRebalance.balanceOf(user1.address));
+        console.log(await chamber.s_userDeposits(user1.address));
         console.log(
-            await ourRebalance.sharesWorth(
-                await ourRebalance.balanceOf(user1.address)
-            )
+            await chamber.sharesWorth(await chamber.s_userDeposits(user1.address))
         );
         console.log("BALANCE AND SHARESWORTH OF USER2 are");
-        console.log(await ourRebalance.balanceOf(user2.address));
+        console.log(await chamber.s_userDeposits(user2.address));
         console.log(
-            await ourRebalance.sharesWorth(
-                await ourRebalance.balanceOf(user2.address)
-            )
+            await chamber.sharesWorth(await chamber.s_userDeposits(user2.address))
         );
         console.log("TOKENS LEFT IN CONTRACT");
-        console.log(await usd.balanceOf(ourRebalance.address));
-        console.log(await weth.balanceOf(ourRebalance.address));
+        console.log("usd", await usd.balanceOf(chamber.address));
+        console.log("weth", await weth.balanceOf(chamber.address));
+        console.log("matic", await ethers.provider.getBalance(chamber.address));
+        console.log("wmatic", await wmatic.balanceOf(chamber.address))
         console.log("TOKENS IN UNI POSITION");
-        console.log(await ourRebalance.calculateCurrentPositionReserves());
+        console.log(await chamber.calculateCurrentPositionReserves());
+        console.log("TOKENS IN AAVE POSITION");
+        console.log("COLLATERAL TOKENS ");
+        console.log(await chamber.getAUSDCTokenBalance());
+        console.log("DEBT TOKENS ");
+        console.log(
+            await chamber.getVWMATICTokenBalance(),
+            await chamber.getVWETHTokenBalance()
+        );
+        console.log("LTV IS");
+        console.log(await chamber.currentLTV());
+
+        console.log("TOTAL USD BALANCE");
+        console.log(await chamber.currentUSDBalance());
         console.log("-----------------------------------------------------");
     });
 
-    // it("full circuit withdraw", async function () {
-    //     let user1Bal = await ourRebalance.balanceOf(owner.address)
-    //     console.log(user1Bal);
-    //     await ourRebalance.connect(owner).withdraw(user1Bal);
-    // })
-});
+    it("full circuit of withdrawals", async function () {
+        await chamber.connect(owner).withdraw(1000 * 1000 * 1000);console.log("BALANCE AND SHARESWORTH OF OWNER are");
+        console.log(await chamber.s_userDeposits(owner.address));
+        console.log(
+            await chamber.sharesWorth(await chamber.s_userDeposits(owner.address))
+        );
 
-// 205922298
-// 2188100073
+        console.log("TOKENS LEFT IN CONTRACT");
+        console.log("usd", await usd.balanceOf(chamber.address));
+        console.log("weth", await weth.balanceOf(chamber.address));
+        console.log("matic", await ethers.provider.getBalance(chamber.address));
+        console.log("wmatic", await wmatic.balanceOf(chamber.address))
+        console.log("TOKENS IN UNI POSITION");
+        console.log(await chamber.calculateCurrentPositionReserves());
+        console.log("TOKENS IN AAVE POSITION");
+        console.log("COLLATERAL TOKENS ");
+        console.log(await chamber.getAUSDCTokenBalance());
+        console.log("DEBT TOKENS ");
+        console.log(
+            await chamber.getVWMATICTokenBalance(),
+            await chamber.getVWETHTokenBalance()
+        );
+        console.log("LTV IS");
+        console.log(await chamber.currentLTV());
+
+        console.log("TOTAL USD BALANCE");
+        console.log(await chamber.currentUSDBalance());
+        console.log("-----------------------------------------------------");
+    })
+
+});

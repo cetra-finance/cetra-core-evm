@@ -61,9 +61,7 @@ library TransferHelper {
     function safeGetBalance(
         address token,
         address owner
-    ) internal returns (uint256) {
-        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(IERC20.balanceOf.selector, owner));
-        require(success, 'SGB');
-        return abi.decode(data, (uint256));
+    ) internal view returns (uint256 balance) {
+        balance = IERC20(token).balanceOf(address(this));
     }
 }
