@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity >=0.7.0;
+pragma solidity >=0.8.0;
+pragma abicoder v2;
 
 import "./Uniswap/utils/LiquidityAmounts.sol";
 import "./Uniswap/libraries/TickMath.sol";
-import "./Uniswap/interfaces/IV3SwapRouter.sol";
+import "./Uniswap/interfaces/ISwapRouter.sol";
 import "./Uniswap/interfaces/IUniswapV3Pool.sol";
 import "./Uniswap/interfaces/callback/IUniswapV3MintCallback.sol";
 
@@ -19,17 +20,19 @@ import "hardhat/console.sol";
 
 /*Errors */
 error ChamberV1__AaveDepositError();
+error ChamberV1__SwappedWethForWmaticStillCantRepay();
+error ChamberV1__SwappedWmaticForWethStillCantRepay();
+error ChamberV1__SwappedUsdcForWethStillCantRepay();
 
 contract ChamberV1 is IUniswapV3MintCallback {
-
     using TickMath for int24;
 
     // =================================
     // Storage for users and their deposits
     // =================================
 
-    uint256 public s_totalDeposits;
-    mapping(address => uint256) public s_userDeposits;
+    uint256 public s_totalShares;
+    mapping(address => uint256) public s_userShares;
 
     // =================================
     // Storage for pool
@@ -60,7 +63,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
     IWETHGateway private immutable i_aaveWTG3;
     IPool private immutable i_aaveV3Pool;
 
-    IV3SwapRouter private immutable i_uniswapSwapRouter;
+    ISwapRouter private immutable i_uniswapSwapRouter;
     IUniswapV3Pool private immutable i_uniswapPool;
 
     uint256 private constant PRECISION = 1e18;
@@ -77,11 +80,9 @@ contract ChamberV1 is IUniswapV3MintCallback {
         address _aaveVWETHAddress,
         address _aaveVWMATICAddress,
         address _aaveOracleAddress,
-        address _aaveAUSDCAddress
-    )
-        //uint256 _targetLTV
-    {
-        i_uniswapSwapRouter = IV3SwapRouter(_uniswapSwapRouterAddress);
+        address _aaveAUSDCAddress //uint256 _targetLTV
+    ) {
+        i_uniswapSwapRouter = ISwapRouter(_uniswapSwapRouterAddress);
         i_uniswapPool = IUniswapV3Pool(_uniswapPoolAddress);
         i_aaveWTG3 = IWETHGateway(_aaveWTG3Address);
         i_aaveV3Pool = IPool(_aaveV3poolAddress);
@@ -113,7 +114,11 @@ contract ChamberV1 is IUniswapV3MintCallback {
         require(msg.sender == address(i_uniswapPool), "callback caller");
 
         if (amount0Owed > 0)
-            TransferHelper.safeTransfer(i_wmaticAddress, msg.sender, amount0Owed);
+            TransferHelper.safeTransfer(
+                i_wmaticAddress,
+                msg.sender,
+                amount0Owed
+            );
         if (amount1Owed > 0)
             TransferHelper.safeTransfer(i_wethAddress, msg.sender, amount1Owed);
     }
@@ -126,11 +131,10 @@ contract ChamberV1 is IUniswapV3MintCallback {
         {
             uint256 currUsdBalance = currentUSDBalance();
             uint256 sharesToMint = (currUsdBalance != 0)
-                ? ((usdAmount * s_totalDeposits) / (currUsdBalance))
+                ? ((usdAmount * s_totalShares) / (currUsdBalance))
                 : usdAmount;
-            s_totalDeposits += sharesToMint;
-            s_userDeposits[msg.sender] += sharesToMint;
-            // _mint(msg.sender, sharesToMint);
+            s_totalShares += sharesToMint;
+            s_userShares[msg.sender] += sharesToMint;
             require(sharesWorth(sharesToMint) <= usdAmount, "FC0");
             TransferHelper.safeTransferFrom(
                 i_usdcAddress,
@@ -138,8 +142,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 address(this),
                 usdAmount
             );
-            // console.log("CURRENT USD BALANCE is", currentUSDBalance());
-            // console.log("DEPOSIT's sharesWorth is", sharesWorth(sharesToMint));
         }
 
         uint256 amount0;
@@ -155,8 +157,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
             usedLTV = currentLTV();
             (amount0, amount1) = calculateRealPoolReserves();
         }
-        // console.log("USING AMOUNTS", amount0, amount1);
-        // console.log("USING LTV", usedLTV);
 
         i_aaveV3Pool.supply(
             i_usdcAddress,
@@ -195,8 +195,14 @@ contract ChamberV1 is IUniswapV3MintCallback {
         i_aaveV3Pool.borrow(i_wethAddress, wethToBorrow, 2, 0, address(this));
         // console.log("WETH BORROWED", getVWETHTokenBalance());
         {
-            uint256 wmaticRecieved = TransferHelper.safeGetBalance(i_wmaticAddress, address(this));
-            uint256 wethRecieved = TransferHelper.safeGetBalance(i_wethAddress, address(this));
+            uint256 wmaticRecieved = TransferHelper.safeGetBalance(
+                i_wmaticAddress,
+                address(this)
+            );
+            uint256 wethRecieved = TransferHelper.safeGetBalance(
+                i_wethAddress,
+                address(this)
+            );
             (uint160 sqrtRatioX96, , , , , , ) = i_uniswapPool.slot0();
             uint128 liquidityMinted = LiquidityAmounts.getLiquidityForAmounts(
                 sqrtRatioX96,
@@ -216,73 +222,304 @@ contract ChamberV1 is IUniswapV3MintCallback {
         }
     }
 
-    function withdraw(
-        uint256 _shares
-    ) public {
-        uint256 usdToReturn = sharesWorth(_shares);
-        s_totalDeposits -= _shares;
-        s_userDeposits[msg.sender] -= _shares;
-        // _burn(msg.sender, _shares);
+    function burn(uint256 _shares) public {
+        uint256 usdcToReturn = 0;
 
-        console.log("usdToReturn", usdToReturn);
+        (uint128 totalLiquidity, , , , ) = i_uniswapPool.positions(
+            keccak256(abi.encodePacked(address(this), s_lowerTick, s_upperTick))
+        );
+        (
+            uint256 burnWMATIC,
+            uint256 burnWETH,
+            uint256 feeWMATIC,
+            uint256 feeWETH
+        ) = _withdraw(uint128((totalLiquidity * _shares) / s_totalShares));
 
-        // console.log("i_wethAddress balance", TransferHelper.safeGetBalance(i_wethAddress, address(this)));
-        // console.log("i_wmaticAddress balance", TransferHelper.safeGetBalance(i_wmaticAddress, address(this)));
-        // console.log("i_usdcAddress balance", TransferHelper.safeGetBalance(i_usdcAddress, address(this)));
-        // console.log("getVWETHTokenBalance", getVWETHTokenBalance());
-        // console.log("getVWMATICTokenBalance", getVWMATICTokenBalance());
-        // console.log("getAUSDCTokenBalance", getAUSDCTokenBalance());
-
+        uint256 amountWmatic = burnWMATIC +
+            ((TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) - burnWMATIC) *
+                _shares) /
+            s_totalShares;
+        uint256 amountWeth = burnWETH +
+            ((TransferHelper.safeGetBalance(i_wethAddress, address(this)) - burnWETH) *
+                _shares) /
+            s_totalShares;
+        uint256 usdcBalanceBefore = TransferHelper.safeGetBalance(i_usdcAddress, address(this));
         {
-            (uint128 liquidity, , , , ) = i_uniswapPool.positions(keccak256(abi.encodePacked(address(this), s_lowerTick, s_upperTick)));
-            i_uniswapPool.burn(s_lowerTick, s_upperTick, liquidity);
-
-            i_uniswapPool.collect(
-                address(this),
-                s_lowerTick,
-                s_upperTick,
-                type(uint128).max,
-                type(uint128).max
-            );
+            (
+                uint256 wmaticRemainder,
+                uint256 wethRemainder
+            ) = _repayAndWithdraw(_shares, amountWmatic, amountWeth);
+            if (wmaticRemainder > 0) {
+                usdcToReturn += swapExactAssetToStable(
+                    i_wmaticAddress,
+                    i_wethAddress,
+                    wmaticRemainder
+                );
+            }
+            if (wethRemainder > 0) {
+                usdcToReturn += swapExactAssetToStable(
+                    i_wethAddress,
+                    i_wmaticAddress,
+                    wethRemainder
+                );
+            }
         }
 
-        console.log("i_wethAddress balance", TransferHelper.safeGetBalance(i_wethAddress, address(this)));
-        console.log("i_wmaticAddress balance", TransferHelper.safeGetBalance(i_wmaticAddress, address(this)));
-        console.log("i_usdcAddress balance", TransferHelper.safeGetBalance(i_usdcAddress, address(this)));
-        console.log("getVWETHTokenBalance", getVWETHTokenBalance());
-        console.log("getVWMATICTokenBalance", getVWMATICTokenBalance());
-        console.log("getAUSDCTokenBalance", getAUSDCTokenBalance());
+        s_totalShares -= _shares;
+        s_userShares[msg.sender] -= _shares;
 
-        i_aaveV3Pool.repay(
-            i_wethAddress,
-            TransferHelper.safeGetBalance(i_wethAddress, address(this)),
-            2,
-            address(this)
+        TransferHelper.safeTransfer(
+            i_usdcAddress,
+            msg.sender,
+            TransferHelper.safeGetBalance(i_usdcAddress, address(this)) - usdcBalanceBefore
         );
+    }
 
-        i_aaveV3Pool.repay(
-            i_wmaticAddress,
-            TransferHelper.safeGetBalance(i_wmaticAddress, address(this)),
-            2,
-            address(this)
-        );
+    function _repayAndWithdraw(
+        uint256 _shares,
+        uint256 wmaticOwnedByUser,
+        uint256 wethOwnedByUser
+    ) internal returns (uint256, uint256) {
+        uint256 wmaticDebtToCover = (getVWMATICTokenBalance() * _shares) /
+            s_totalShares;
+        uint256 wethDebtToCover = (getVWETHTokenBalance() * _shares) /
+            s_totalShares;
+        uint256 wmaticBalanceBefore = TransferHelper.safeGetBalance(i_wmaticAddress, address(this));
+        uint256 wethBalanceBefore = TransferHelper.safeGetBalance(i_wethAddress, address(this));
+        uint256 wmaticRemainder;
+        uint256 wethRemainder;
 
-        console.log("---------------------");
+        uint256 wethSwapped = 0;
+        uint256 usdcSwapped = 0;
 
-        console.log("i_wethAddress balance", TransferHelper.safeGetBalance(i_wethAddress, address(this)));
-        console.log("i_wmaticAddress balance", TransferHelper.safeGetBalance(i_wmaticAddress, address(this)));
-        console.log("i_usdcAddress balance", TransferHelper.safeGetBalance(i_usdcAddress, address(this)));
-        console.log("getVWETHTokenBalance", getVWETHTokenBalance());
-        console.log("getVWMATICTokenBalance", getVWMATICTokenBalance());
-        console.log("getAUSDCTokenBalance", getAUSDCTokenBalance());
+        if (wmaticOwnedByUser < wmaticDebtToCover) {
+            wethSwapped += swapAssetToExactAsset(
+                i_wethAddress,
+                i_wmaticAddress,
+                wmaticDebtToCover - wmaticOwnedByUser
+            );
+            if (
+                wmaticOwnedByUser +
+                    TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) -
+                    wmaticBalanceBefore <
+                wmaticDebtToCover
+            ) {
+                revert ChamberV1__SwappedWethForWmaticStillCantRepay();
+            } else {
+                i_aaveV3Pool.repay(
+                    i_wmaticAddress,
+                    wmaticDebtToCover,
+                    2,
+                    address(this)
+                );
+                // no dust should be remaining
+                // uint256 wmaticUserRemainder = wmaticOwnedByUser +
+                //     IERC20(i_wmaticAddress).balanceOf(address(this)) -
+                //     wmaticBalanceBefore -
+                //     wmaticDebtToCover;
+            }
+            wmaticRemainder = 0;
+        } else {
+            i_aaveV3Pool.repay(
+                i_wmaticAddress,
+                wmaticDebtToCover,
+                2,
+                address(this)
+            );
+            wmaticRemainder = wmaticDebtToCover - wmaticOwnedByUser;
+        }
 
+        if (wethOwnedByUser < wethDebtToCover) {
+            i_aaveV3Pool.withdraw(
+                i_usdcAddress,
+                (((wmaticDebtToCover * PRECISION) / getWmaticOraclePrice()) *
+                    PRECISION) / currentLTV(),
+                address(this)
+            );
+            usdcSwapped += swapStableToExactAsset(
+                i_wethAddress,
+                i_wmaticAddress,
+                wethDebtToCover - wethOwnedByUser + wethSwapped
+            );
+            if (
+                wethOwnedByUser +
+                    (TransferHelper.safeGetBalance(i_wethAddress, address(this)) -
+                        wethBalanceBefore) <
+                wethDebtToCover
+            ) {
+                revert ChamberV1__SwappedUsdcForWethStillCantRepay();
+            } else {
+                i_aaveV3Pool.repay(
+                    i_wethAddress,
+                    wethDebtToCover,
+                    2,
+                    address(this)
+                );
+                // no dust should be remaining
+                // uint256 wmaticUserRemainder = wmaticOwnedByUser +
+                //     IERC20(i_wmaticAddress).balanceOf(address(this)) -
+                //     wmaticBalanceBefore -
+                //     wmaticDebtToCover;
+            }
+            wethRemainder = 0;
+        } else {
+            i_aaveV3Pool.repay(
+                i_wethAddress,
+                wethDebtToCover,
+                2,
+                address(this)
+            );
+            wethRemainder = wethOwnedByUser - wethDebtToCover;
+        }
         i_aaveV3Pool.withdraw(
             i_usdcAddress,
-            8000000006,
+            (((wethDebtToCover * PRECISION) / getWethOraclePrice()) *
+                PRECISION) / currentLTV(),
             address(this)
         );
 
-        TransferHelper.safeTransfer(i_usdcAddress, msg.sender, usdToReturn);
+        return (wmaticRemainder, wethRemainder);
+    }
+
+    function swapExactAssetToStable(
+        address assetIn,
+        address assetOther,
+        uint256 amountIn
+    ) internal returns (uint256) {
+        TransferHelper.safeApprove(
+            assetIn,
+            address(i_uniswapSwapRouter),
+            type(uint128).max
+        );
+        ISwapRouter.ExactInputParams memory params0 = ISwapRouter
+            .ExactInputParams({
+                path: abi.encodePacked(assetIn, uint24(500), i_usdcAddress),
+                recipient: address(this),
+                deadline: block.timestamp,
+                amountIn: amountIn / 2 + 1,
+                amountOutMinimum: 0
+            });
+        uint256 amountOut0 = i_uniswapSwapRouter.exactInput(params0);
+
+        ISwapRouter.ExactInputParams memory params1 = ISwapRouter
+            .ExactInputParams({
+                path: abi.encodePacked(
+                    assetIn,
+                    uint24(500),
+                    assetOther,
+                    uint24(500),
+                    i_usdcAddress
+                ),
+                recipient: address(this),
+                deadline: block.timestamp,
+                amountIn: amountIn / 2 + 1,
+                amountOutMinimum: 0
+            });
+        uint256 amountOut1 = i_uniswapSwapRouter.exactInput(params1);
+        return (amountOut0 + amountOut1);
+    }
+
+    function swapStableToExactAsset(
+        address assetOut,
+        address assetOther,
+        uint256 amountOut
+    ) internal returns (uint256) {
+        TransferHelper.safeApprove(
+            i_usdcAddress,
+            address(i_uniswapSwapRouter),
+            type(uint128).max
+        );
+        ISwapRouter.ExactOutputParams memory params0 = ISwapRouter
+            .ExactOutputParams({
+                path: abi.encodePacked(i_usdcAddress, uint24(500), assetOut),
+                recipient: address(this),
+                deadline: block.timestamp,
+                amountOut: amountOut / 2 + 1,
+                amountInMaximum: type(uint128).max
+            });
+        uint256 amountIn0 = i_uniswapSwapRouter.exactOutput(params0);
+        ISwapRouter.ExactOutputParams memory params1 = ISwapRouter
+            .ExactOutputParams({
+                path: abi.encodePacked(
+                    i_usdcAddress,
+                    uint24(500),
+                    assetOther,
+                    uint24(500),
+                    assetOut
+                ),
+                recipient: address(this),
+                deadline: block.timestamp,
+                amountOut: amountOut / 2 + 1,
+                amountInMaximum: type(uint128).max
+            });
+        uint256 amountIn1 = i_uniswapSwapRouter.exactOutput(params1);
+        return (amountIn0 + amountIn1);
+    }
+
+    function swapAssetToExactAsset(
+        address assetIn,
+        address assetOut,
+        uint256 amountOut
+    ) internal returns (uint256) {
+        TransferHelper.safeApprove(
+            i_wethAddress,
+            address(i_uniswapSwapRouter),
+            type(uint128).max
+        );
+
+        ISwapRouter.ExactOutputParams memory params0 = ISwapRouter
+            .ExactOutputParams({
+                path: abi.encodePacked(
+                    assetIn,
+                    uint24(500),
+                    i_usdcAddress,
+                    uint24(500),
+                    assetOut
+                ),
+                recipient: address(this),
+                deadline: block.timestamp,
+                amountOut: amountOut / 2 + 1,
+                amountInMaximum: type(uint128).max
+            });
+        uint256 amountIn0 = i_uniswapSwapRouter.exactOutput(params0);
+        ISwapRouter.ExactOutputParams memory params1 = ISwapRouter
+            .ExactOutputParams({
+                path: abi.encodePacked(assetIn, uint24(500), assetOut),
+                recipient: address(this),
+                deadline: block.timestamp,
+                amountOut: amountOut / 2 - 1,
+                amountInMaximum: type(uint128).max
+            });
+        uint256 amountIn1 = i_uniswapSwapRouter.exactOutput(params1);
+        return (amountIn0 + amountIn1);
+    }
+
+    function _withdraw(
+        uint128 liquidityToBurn
+    ) internal returns (uint256, uint256, uint256, uint256) {
+        uint256 preBalanceWMATIC = TransferHelper.safeGetBalance(i_wmaticAddress, address(this));
+        uint256 preBalanceWETH = TransferHelper.safeGetBalance(i_wethAddress, address(this));
+
+        (uint256 burnWMATIC, uint256 burnWETH) = i_uniswapPool.burn(
+            s_lowerTick,
+            s_upperTick,
+            liquidityToBurn
+        );
+        i_uniswapPool.collect(
+            address(this),
+            s_lowerTick,
+            s_upperTick,
+            type(uint128).max,
+            type(uint128).max
+        );
+        uint256 feeWMATIC = TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) -
+            preBalanceWMATIC -
+            burnWMATIC;
+        uint256 feeWETH = TransferHelper.safeGetBalance(i_wethAddress, address(this)) -
+            preBalanceWETH -
+            burnWETH;
+
+        return (burnWMATIC, burnWETH, feeWMATIC, feeWETH);
     }
 
     function rebalance() public {}
@@ -333,7 +570,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
     }
 
     function sharesWorth(uint256 shares) public view returns (uint256) {
-        return (currentUSDBalance() * shares) / s_totalDeposits;
+        return (currentUSDBalance() * shares) / s_totalShares;
     }
 
     function getTick() public view returns (int24) {
@@ -404,7 +641,9 @@ contract ChamberV1 is IUniswapV3MintCallback {
         amount0Current +=
             fee0 +
             TransferHelper.safeGetBalance(i_wmaticAddress, address(this));
-        amount1Current += fee1 + TransferHelper.safeGetBalance(i_wethAddress, address(this));
+        amount1Current +=
+            fee1 +
+            TransferHelper.safeGetBalance(i_wethAddress, address(this));
 
         return (amount0Current, amount1Current);
     }

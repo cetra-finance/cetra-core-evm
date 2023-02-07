@@ -104,22 +104,22 @@ describe("Basic tests new", function () {
         console.log(await chamber.currentLTV());
 
         console.log(
-            `Total amount of shares minted is ${await chamber.s_totalDeposits()}`
+            `Total amount of shares minted is ${await chamber.s_totalShares()}`
         );
         console.log("BALANCE AND SHARESWORTH OF OWNER are");
-        console.log(await chamber.s_userDeposits(owner.address));
+        console.log(await chamber.s_userShares(owner.address));
         console.log(
-            await chamber.sharesWorth(await chamber.s_userDeposits(owner.address))
+            await chamber.sharesWorth(await chamber.s_userShares(owner.address))
         );
         console.log("BALANCE AND SHARESWORTH OF USER1 are");
-        console.log(await chamber.s_userDeposits(user1.address));
+        console.log(await chamber.s_userShares(user1.address));
         console.log(
-            await chamber.sharesWorth(await chamber.s_userDeposits(user1.address))
+            await chamber.sharesWorth(await chamber.s_userShares(user1.address))
         );
         console.log("BALANCE AND SHARESWORTH OF USER2 are");
-        console.log(await chamber.s_userDeposits(user2.address));
+        console.log(await chamber.s_userShares(user2.address));
         console.log(
-            await chamber.sharesWorth(await chamber.s_userDeposits(user2.address))
+            await chamber.sharesWorth(await chamber.s_userShares(user2.address))
         );
         console.log("TOKENS LEFT IN CONTRACT");
         console.log("usd", await usd.balanceOf(chamber.address));
@@ -145,12 +145,12 @@ describe("Basic tests new", function () {
     });
 
     it("full circuit of withdrawals", async function () {
-        await chamber.connect(owner).withdraw(1000 * 1000 * 1000);
+        await chamber.connect(owner).burn(1000 * 1000 * 1000);
         
         // console.log("BALANCE AND SHARESWORTH OF OWNER are");
-        // console.log(await chamber.s_userDeposits(owner.address));
+        // console.log(await chamber.s_userShares(owner.address));
         // console.log(
-        //     await chamber.sharesWorth(await chamber.s_userDeposits(owner.address))
+        //     await chamber.sharesWorth(await chamber.s_userShares(owner.address))
         // );
 
         console.log("TOKENS LEFT IN CONTRACT");
