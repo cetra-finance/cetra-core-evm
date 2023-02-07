@@ -145,11 +145,13 @@ describe("Basic tests new", function () {
     });
 
     it("full circuit of withdrawals", async function () {
-        await chamber.connect(owner).withdraw(1000 * 1000 * 1000);console.log("BALANCE AND SHARESWORTH OF OWNER are");
-        console.log(await chamber.s_userDeposits(owner.address));
-        console.log(
-            await chamber.sharesWorth(await chamber.s_userDeposits(owner.address))
-        );
+        await chamber.connect(owner).withdraw(1000 * 1000 * 1000);
+        
+        // console.log("BALANCE AND SHARESWORTH OF OWNER are");
+        // console.log(await chamber.s_userDeposits(owner.address));
+        // console.log(
+        //     await chamber.sharesWorth(await chamber.s_userDeposits(owner.address))
+        // );
 
         console.log("TOKENS LEFT IN CONTRACT");
         console.log("usd", await usd.balanceOf(chamber.address));
@@ -169,8 +171,8 @@ describe("Basic tests new", function () {
         console.log("LTV IS");
         console.log(await chamber.currentLTV());
 
-        console.log("TOTAL USD BALANCE");
-        console.log(await chamber.currentUSDBalance());
+        // console.log("TOTAL USD BALANCE");
+        // console.log(await chamber.currentUSDBalance());
         console.log("-----------------------------------------------------");
     })
 

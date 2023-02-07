@@ -23,7 +23,7 @@ error ChamberV1__AaveDepositError();
 contract ChamberV1 is IUniswapV3MintCallback {
 
     using TickMath for int24;
-    
+
     // =================================
     // Storage for users and their deposits
     // =================================
@@ -224,6 +224,8 @@ contract ChamberV1 is IUniswapV3MintCallback {
         s_userDeposits[msg.sender] -= _shares;
         // _burn(msg.sender, _shares);
 
+        console.log("usdToReturn", usdToReturn);
+
         // console.log("i_wethAddress balance", TransferHelper.safeGetBalance(i_wethAddress, address(this)));
         // console.log("i_wmaticAddress balance", TransferHelper.safeGetBalance(i_wmaticAddress, address(this)));
         // console.log("i_usdcAddress balance", TransferHelper.safeGetBalance(i_usdcAddress, address(this)));
@@ -244,12 +246,12 @@ contract ChamberV1 is IUniswapV3MintCallback {
             );
         }
 
-        // console.log("i_wethAddress balance", TransferHelper.safeGetBalance(i_wethAddress, address(this)));
-        // console.log("i_wmaticAddress balance", TransferHelper.safeGetBalance(i_wmaticAddress, address(this)));
-        // console.log("i_usdcAddress balance", TransferHelper.safeGetBalance(i_usdcAddress, address(this)));
-        // console.log("getVWETHTokenBalance", getVWETHTokenBalance());
-        // console.log("getVWMATICTokenBalance", getVWMATICTokenBalance());
-        // console.log("getAUSDCTokenBalance", getAUSDCTokenBalance());
+        console.log("i_wethAddress balance", TransferHelper.safeGetBalance(i_wethAddress, address(this)));
+        console.log("i_wmaticAddress balance", TransferHelper.safeGetBalance(i_wmaticAddress, address(this)));
+        console.log("i_usdcAddress balance", TransferHelper.safeGetBalance(i_usdcAddress, address(this)));
+        console.log("getVWETHTokenBalance", getVWETHTokenBalance());
+        console.log("getVWMATICTokenBalance", getVWMATICTokenBalance());
+        console.log("getAUSDCTokenBalance", getAUSDCTokenBalance());
 
         i_aaveV3Pool.repay(
             i_wethAddress,
@@ -265,9 +267,18 @@ contract ChamberV1 is IUniswapV3MintCallback {
             address(this)
         );
 
+        console.log("---------------------");
+
+        console.log("i_wethAddress balance", TransferHelper.safeGetBalance(i_wethAddress, address(this)));
+        console.log("i_wmaticAddress balance", TransferHelper.safeGetBalance(i_wmaticAddress, address(this)));
+        console.log("i_usdcAddress balance", TransferHelper.safeGetBalance(i_usdcAddress, address(this)));
+        console.log("getVWETHTokenBalance", getVWETHTokenBalance());
+        console.log("getVWMATICTokenBalance", getVWMATICTokenBalance());
+        console.log("getAUSDCTokenBalance", getAUSDCTokenBalance());
+
         i_aaveV3Pool.withdraw(
             i_usdcAddress,
-            getAUSDCTokenBalance(),
+            8000000006,
             address(this)
         );
 
