@@ -71,7 +71,18 @@ describe("Basic tests new", function () {
             .connect(user2)
             .approve(chamber.address, 1000 * 1000 * 1000 * 1000 * 1000);
 
-        await chamber.connect(owner).giveAllApproves();
+        await chamber.connect(owner).giveApprove(usd.address, currNetworkConfig.aaveV3PoolAddress);
+        await chamber.connect(owner).giveApprove(usd.address, currNetworkConfig.uniswapRouterAddress);
+        await chamber.connect(owner).giveApprove(usd.address, currNetworkConfig.uniswapPoolAddress);
+        await chamber.connect(owner).giveApprove(usd.address, currNetworkConfig.aaveVWETHAddress);
+
+        await chamber.connect(owner).giveApprove(weth.address, currNetworkConfig.aaveV3PoolAddress);
+        await chamber.connect(owner).giveApprove(weth.address, currNetworkConfig.uniswapRouterAddress);
+        await chamber.connect(owner).giveApprove(weth.address, currNetworkConfig.uniswapPoolAddress);
+        await chamber.connect(owner).giveApprove(weth.address, currNetworkConfig.aaveVWETHAddress);
+
+        await chamber.connect(owner).giveApprove(wmatic.address, currNetworkConfig.aaveV3PoolAddress);
+        await chamber.connect(owner).giveApprove(wmatic.address, currNetworkConfig.uniswapRouterAddress);
 
         console.log(`Owner's address is ${owner.address}`);
         console.log(

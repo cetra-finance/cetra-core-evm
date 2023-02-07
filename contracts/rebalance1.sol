@@ -3,7 +3,6 @@ pragma solidity >=0.8.0;
 pragma abicoder v2;
 
 import "./Uniswap/utils/LiquidityAmounts.sol";
-import "./Uniswap/libraries/TickMath.sol";
 import "./Uniswap/interfaces/ISwapRouter.sol";
 import "./Uniswap/interfaces/IUniswapV3Pool.sol";
 import "./Uniswap/interfaces/callback/IUniswapV3MintCallback.sol";
@@ -15,6 +14,7 @@ import "./AaveInterfaces/IAToken.sol";
 import "./AaveInterfaces/IVariableDebtToken.sol";
 
 import "./TransferHelper.sol";
+import "./MathHelper.sol";
 
 import "hardhat/console.sol";
 
@@ -23,9 +23,10 @@ error ChamberV1__AaveDepositError();
 error ChamberV1__SwappedWethForWmaticStillCantRepay();
 error ChamberV1__SwappedWmaticForWethStillCantRepay();
 error ChamberV1__SwappedUsdcForWethStillCantRepay();
+error ChamberV1__CallerIsNotUniPool();
+error ChamberV1__sharesWorthMoreThenDep();
 
 contract ChamberV1 is IUniswapV3MintCallback {
-    using TickMath for int24;
 
     // =================================
     // Storage for users and their deposits
@@ -80,7 +81,8 @@ contract ChamberV1 is IUniswapV3MintCallback {
         address _aaveVWETHAddress,
         address _aaveVWMATICAddress,
         address _aaveOracleAddress,
-        address _aaveAUSDCAddress //uint256 _targetLTV
+        address _aaveAUSDCAddress
+        //uint256 _targetLTV
     ) {
         i_uniswapSwapRouter = ISwapRouter(_uniswapSwapRouterAddress);
         i_uniswapPool = IUniswapV3Pool(_uniswapPoolAddress);
@@ -111,14 +113,10 @@ contract ChamberV1 is IUniswapV3MintCallback {
         uint256 amount1Owed,
         bytes calldata /*_data*/
     ) external override {
-        require(msg.sender == address(i_uniswapPool), "callback caller");
+        if (msg.sender != address(i_uniswapPool)) {revert ChamberV1__CallerIsNotUniPool();}
 
         if (amount0Owed > 0)
-            TransferHelper.safeTransfer(
-                i_wmaticAddress,
-                msg.sender,
-                amount0Owed
-            );
+            TransferHelper.safeTransfer(i_wmaticAddress,msg.sender,amount0Owed);
         if (amount1Owed > 0)
             TransferHelper.safeTransfer(i_wethAddress, msg.sender, amount1Owed);
     }
@@ -127,7 +125,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
     // Main funciton
     // =================================
 
-    function mint(uint256 usdAmount) public {
+    function mint(uint256 usdAmount) external {
         {
             uint256 currUsdBalance = currentUSDBalance();
             uint256 sharesToMint = (currUsdBalance != 0)
@@ -135,7 +133,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 : usdAmount;
             s_totalShares += sharesToMint;
             s_userShares[msg.sender] += sharesToMint;
-            require(sharesWorth(sharesToMint) <= usdAmount, "FC0");
+            if(sharesWorth(sharesToMint) >= usdAmount) {revert ChamberV1__sharesWorthMoreThenDep();}
             TransferHelper.safeTransferFrom(
                 i_usdcAddress,
                 msg.sender,
@@ -147,15 +145,18 @@ contract ChamberV1 is IUniswapV3MintCallback {
         uint256 amount0;
         uint256 amount1;
         uint256 usedLTV;
+
+        int24 currentTick = getTick(); 
+
         if (!s_liquidityTokenId) {
-            s_lowerTick = ((getTick() - 400) / 10) * 10;
-            s_upperTick = ((getTick() + 800) / 10) * 10;
-            (amount0, amount1) = calculateVirtPoolReserves();
+            s_lowerTick = ((currentTick - 400) / 10) * 10;
+            s_upperTick = ((currentTick + 800) / 10) * 10;
+            (amount0, amount1) = calculateVirtPoolReserves(currentTick);
             usedLTV = s_targetLTV;
             s_liquidityTokenId = true;
         } else {
             usedLTV = currentLTV();
-            (amount0, amount1) = calculateRealPoolReserves();
+            (amount0, amount1) = calculateRealPoolReserves(currentTick);
         }
 
         i_aaveV3Pool.supply(
@@ -165,18 +166,22 @@ contract ChamberV1 is IUniswapV3MintCallback {
             0
         );
 
-        uint256 wethToBorrow = (usdAmount * getUsdcOraclePrice() * usedLTV) /
-            ((getWmaticOraclePrice() * amount0) /
+        uint256 usdcOraclePrice = getUsdcOraclePrice();
+        uint256 wmaticOraclePrice = getWmaticOraclePrice();
+        uint256 wethOraclePrice = getWethOraclePrice();
+
+        uint256 wethToBorrow = (usdAmount * usdcOraclePrice * usedLTV) /
+            ((wmaticOraclePrice * amount0) /
                 amount1 /
                 1e12 +
-                getWethOraclePrice() /
+                wethOraclePrice /
                 1e12) /
             PRECISION;
 
-        uint256 wmaticToBorrow = (usdAmount * getUsdcOraclePrice() * usedLTV) /
-            (getWmaticOraclePrice() /
+        uint256 wmaticToBorrow = (usdAmount * usdcOraclePrice * usedLTV) /
+            (wmaticOraclePrice /
                 1e12 +
-                (getWethOraclePrice() * amount1) /
+                (wethOraclePrice * amount1) /
                 amount0 /
                 1e12) /
             PRECISION;
@@ -206,8 +211,8 @@ contract ChamberV1 is IUniswapV3MintCallback {
             (uint160 sqrtRatioX96, , , , , , ) = i_uniswapPool.slot0();
             uint128 liquidityMinted = LiquidityAmounts.getLiquidityForAmounts(
                 sqrtRatioX96,
-                s_lowerTick.getSqrtRatioAtTick(),
-                s_upperTick.getSqrtRatioAtTick(),
+                MathHelper.getSqrtRatioAtTick(s_lowerTick),
+                MathHelper.getSqrtRatioAtTick(s_upperTick),
                 wmaticRecieved,
                 wethRecieved
             );
@@ -222,18 +227,15 @@ contract ChamberV1 is IUniswapV3MintCallback {
         }
     }
 
-    function burn(uint256 _shares) public {
+    function burn(uint256 _shares) external {
         uint256 usdcToReturn = 0;
 
-        (uint128 totalLiquidity, , , , ) = i_uniswapPool.positions(
-            keccak256(abi.encodePacked(address(this), s_lowerTick, s_upperTick))
-        );
         (
             uint256 burnWMATIC,
             uint256 burnWETH,
             uint256 feeWMATIC,
             uint256 feeWETH
-        ) = _withdraw(uint128((totalLiquidity * _shares) / s_totalShares));
+        ) = _withdraw(uint128((getPositionLiquidity() * _shares) / s_totalShares));
 
         uint256 amountWmatic = burnWMATIC +
             ((TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) - burnWMATIC) *
@@ -386,23 +388,19 @@ contract ChamberV1 is IUniswapV3MintCallback {
         address assetOther,
         uint256 amountIn
     ) internal returns (uint256) {
-        TransferHelper.safeApprove(
-            assetIn,
-            address(i_uniswapSwapRouter),
-            type(uint128).max
-        );
-        ISwapRouter.ExactInputParams memory params0 = ISwapRouter
-            .ExactInputParams({
+
+        uint256 amountOut0 = i_uniswapSwapRouter.exactInput(
+            ISwapRouter.ExactInputParams({
                 path: abi.encodePacked(assetIn, uint24(500), i_usdcAddress),
                 recipient: address(this),
                 deadline: block.timestamp,
                 amountIn: amountIn / 2 + 1,
                 amountOutMinimum: 0
-            });
-        uint256 amountOut0 = i_uniswapSwapRouter.exactInput(params0);
+            })
+        );
 
-        ISwapRouter.ExactInputParams memory params1 = ISwapRouter
-            .ExactInputParams({
+        uint256 amountOut1 = i_uniswapSwapRouter.exactInput(
+            ISwapRouter.ExactInputParams({
                 path: abi.encodePacked(
                     assetIn,
                     uint24(500),
@@ -414,8 +412,8 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 deadline: block.timestamp,
                 amountIn: amountIn / 2 + 1,
                 amountOutMinimum: 0
-            });
-        uint256 amountOut1 = i_uniswapSwapRouter.exactInput(params1);
+            })
+        );
         return (amountOut0 + amountOut1);
     }
 
@@ -424,22 +422,19 @@ contract ChamberV1 is IUniswapV3MintCallback {
         address assetOther,
         uint256 amountOut
     ) internal returns (uint256) {
-        TransferHelper.safeApprove(
-            i_usdcAddress,
-            address(i_uniswapSwapRouter),
-            type(uint128).max
-        );
-        ISwapRouter.ExactOutputParams memory params0 = ISwapRouter
-            .ExactOutputParams({
+        
+        uint256 amountIn0 = i_uniswapSwapRouter.exactOutput(
+            ISwapRouter.ExactOutputParams({
                 path: abi.encodePacked(i_usdcAddress, uint24(500), assetOut),
                 recipient: address(this),
                 deadline: block.timestamp,
                 amountOut: amountOut / 2 + 1,
                 amountInMaximum: type(uint128).max
-            });
-        uint256 amountIn0 = i_uniswapSwapRouter.exactOutput(params0);
-        ISwapRouter.ExactOutputParams memory params1 = ISwapRouter
-            .ExactOutputParams({
+            })
+        );
+
+        uint256 amountIn1 = i_uniswapSwapRouter.exactOutput(
+            ISwapRouter.ExactOutputParams({
                 path: abi.encodePacked(
                     i_usdcAddress,
                     uint24(500),
@@ -451,8 +446,8 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 deadline: block.timestamp,
                 amountOut: amountOut / 2 + 1,
                 amountInMaximum: type(uint128).max
-            });
-        uint256 amountIn1 = i_uniswapSwapRouter.exactOutput(params1);
+            })
+        );
         return (amountIn0 + amountIn1);
     }
 
@@ -461,14 +456,9 @@ contract ChamberV1 is IUniswapV3MintCallback {
         address assetOut,
         uint256 amountOut
     ) internal returns (uint256) {
-        TransferHelper.safeApprove(
-            i_wethAddress,
-            address(i_uniswapSwapRouter),
-            type(uint128).max
-        );
 
-        ISwapRouter.ExactOutputParams memory params0 = ISwapRouter
-            .ExactOutputParams({
+        uint256 amountIn0 = i_uniswapSwapRouter.exactOutput(
+            ISwapRouter.ExactOutputParams({
                 path: abi.encodePacked(
                     assetIn,
                     uint24(500),
@@ -480,17 +470,18 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 deadline: block.timestamp,
                 amountOut: amountOut / 2 + 1,
                 amountInMaximum: type(uint128).max
-            });
-        uint256 amountIn0 = i_uniswapSwapRouter.exactOutput(params0);
-        ISwapRouter.ExactOutputParams memory params1 = ISwapRouter
-            .ExactOutputParams({
+            })
+        );
+
+        uint256 amountIn1 = i_uniswapSwapRouter.exactOutput(
+            ISwapRouter.ExactOutputParams({
                 path: abi.encodePacked(assetIn, uint24(500), assetOut),
                 recipient: address(this),
                 deadline: block.timestamp,
                 amountOut: amountOut / 2 - 1,
                 amountInMaximum: type(uint128).max
-            });
-        uint256 amountIn1 = i_uniswapSwapRouter.exactOutput(params1);
+            })
+        );
         return (amountIn0 + amountIn1);
     }
 
@@ -522,7 +513,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
         return (burnWMATIC, burnWETH, feeWMATIC, feeWETH);
     }
 
-    function rebalance() public {}
+    function rebalance() external {}
 
     // =================================
     // FallBack
@@ -535,11 +526,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
     // =================================
 
     function currentUSDBalance() public view returns (uint256) {
-        uint256 usdBalance = _currentUSDBalance();
-        return usdBalance;
-    }
-
-    function _currentUSDBalance() internal view returns (uint256) {
         (
             uint256 wmaticPoolBalance,
             uint256 wethPoolBalance
@@ -573,9 +559,8 @@ contract ChamberV1 is IUniswapV3MintCallback {
         return (currentUSDBalance() * shares) / s_totalShares;
     }
 
-    function getTick() public view returns (int24) {
+    function getTick() public view returns (int24 tick) {
         (, int24 tick, , , , , ) = i_uniswapPool.slot0();
-        return tick;
     }
 
     function getUsdcOraclePrice() public view returns (uint256) {
@@ -615,8 +600,8 @@ contract ChamberV1 is IUniswapV3MintCallback {
         (amount0Current, amount1Current) = LiquidityAmounts
             .getAmountsForLiquidity(
                 sqrtRatioX96,
-                s_lowerTick.getSqrtRatioAtTick(),
-                s_upperTick.getSqrtRatioAtTick(),
+                MathHelper.getSqrtRatioAtTick(s_lowerTick),
+                MathHelper.getSqrtRatioAtTick(s_upperTick),
                 liquidity
             );
 
@@ -715,7 +700,14 @@ contract ChamberV1 is IUniswapV3MintCallback {
         return i_aaveVWMATICToken.scaledBalanceOf(address(this));
     }
 
-    function calculateVirtPoolReserves()
+    function getPositionLiquidity() public view returns (uint128) {
+        (uint128 liquidity, , , , ) = i_uniswapPool.positions(_getPositionID());
+        return liquidity;
+    }
+
+    function calculateVirtPoolReserves(
+        int24 _currentTick
+    )
         internal
         view
         returns (uint256, uint256)
@@ -724,28 +716,29 @@ contract ChamberV1 is IUniswapV3MintCallback {
         uint256 amount1;
         uint128 virtLiquidity = 1e18;
         (amount0, amount1) = LiquidityAmounts.getAmountsForLiquidity(
-            getTick().getSqrtRatioAtTick(),
-            s_lowerTick.getSqrtRatioAtTick(),
-            s_upperTick.getSqrtRatioAtTick(),
+            MathHelper.getSqrtRatioAtTick(_currentTick),
+            MathHelper.getSqrtRatioAtTick(s_lowerTick),
+            MathHelper.getSqrtRatioAtTick(s_upperTick),
             virtLiquidity
         );
         return (amount0, amount1);
     }
 
-    function calculateRealPoolReserves()
+    function calculateRealPoolReserves(
+        int24 _currentTick
+    )
         internal
         view
         returns (uint256, uint256)
     {
-        (uint128 liquidity, , , , ) = i_uniswapPool.positions(_getPositionID());
 
         // compute current holdings from liquidity
         (uint256 amount0Current, uint256 amount1Current) = LiquidityAmounts
             .getAmountsForLiquidity(
-                getTick().getSqrtRatioAtTick(),
-                s_lowerTick.getSqrtRatioAtTick(),
-                s_upperTick.getSqrtRatioAtTick(),
-                liquidity
+                MathHelper.getSqrtRatioAtTick(_currentTick),
+                MathHelper.getSqrtRatioAtTick(s_lowerTick),
+                MathHelper.getSqrtRatioAtTick(s_upperTick),
+                getPositionLiquidity()
             );
 
         return (amount0Current, amount1Current);
@@ -755,57 +748,13 @@ contract ChamberV1 is IUniswapV3MintCallback {
     // Temporary solution for testing
     // =================================
 
-    function giveAllApproves() public {
+    function giveApprove(
+        address _token,
+        address _to
+    ) public {
         TransferHelper.safeApprove(
-            i_usdcAddress,
-            address(i_aaveV3Pool),
-            type(uint256).max
-        );
-        TransferHelper.safeApprove(
-            i_usdcAddress,
-            address(i_uniswapSwapRouter),
-            type(uint256).max
-        );
-        TransferHelper.safeApprove(
-            i_usdcAddress,
-            address(i_uniswapPool),
-            type(uint256).max
-        );
-        TransferHelper.safeApprove(
-            i_usdcAddress,
-            address(i_aaveWTG3),
-            type(uint256).max
-        );
-
-        TransferHelper.safeApprove(
-            i_wethAddress,
-            address(i_aaveV3Pool),
-            type(uint256).max
-        );
-        TransferHelper.safeApprove(
-            i_wethAddress,
-            address(i_aaveWTG3),
-            type(uint256).max
-        );
-        TransferHelper.safeApprove(
-            i_wethAddress,
-            address(i_uniswapSwapRouter),
-            type(uint256).max
-        );
-        TransferHelper.safeApprove(
-            i_wethAddress,
-            address(i_uniswapPool),
-            type(uint256).max
-        );
-        TransferHelper.safeApprove(
-            i_wethAddress,
-            address(i_aaveWTG3),
-            type(uint256).max
-        );
-
-        TransferHelper.safeApprove(
-            i_wmaticAddress,
-            address(i_aaveV3Pool),
+            _token,
+            _to,
             type(uint256).max
         );
     }
