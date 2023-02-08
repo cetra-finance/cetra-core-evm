@@ -297,6 +297,8 @@ contract ChamberV1 is IUniswapV3MintCallback {
         uint256 wethSwapped = 0;
         uint256 usdcSwapped = 0;
 
+        uint256 _currentLTV = currentLTV();
+
         if (wmaticOwnedByUser < wmaticDebtToCover) {
             wethSwapped += swapAssetToExactAsset(
                 i_wethAddress,
@@ -331,16 +333,16 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 2,
                 address(this)
             );
-            wmaticRemainder = wmaticDebtToCover - wmaticOwnedByUser;
+            wmaticRemainder = wmaticOwnedByUser - wmaticDebtToCover;
         }
+        
+        i_aaveV3Pool.withdraw(
+            i_usdcAddress,
+            (wmaticDebtToCover * getWmaticOraclePrice() * getUsdcOraclePrice() / _currentLTV / 1e30),
+            address(this)
+        );
 
         if (wethOwnedByUser < wethDebtToCover) {
-            i_aaveV3Pool.withdraw(
-                i_usdcAddress,
-                (((wmaticDebtToCover * PRECISION) / getWmaticOraclePrice()) *
-                    PRECISION) / currentLTV(),
-                address(this)
-            );
             usdcSwapped += swapStableToExactAsset(
                 i_wethAddress,
                 i_wmaticAddress,
@@ -376,10 +378,10 @@ contract ChamberV1 is IUniswapV3MintCallback {
             );
             wethRemainder = wethOwnedByUser - wethDebtToCover;
         }
+
         i_aaveV3Pool.withdraw(
             i_usdcAddress,
-            (((wethDebtToCover * PRECISION) / getWethOraclePrice()) *
-                PRECISION) / currentLTV(),
+            (wethDebtToCover * getWethOraclePrice() * getUsdcOraclePrice() / _currentLTV / 1e30),
             address(this)
         );
 
@@ -397,7 +399,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 path: abi.encodePacked(assetIn, uint24(500), i_usdcAddress),
                 recipient: address(this),
                 deadline: block.timestamp,
-                amountIn: amountIn / 2 + 1,
+                amountIn: amountIn / 2,
                 amountOutMinimum: 0
             })
         );
@@ -413,7 +415,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 ),
                 recipient: address(this),
                 deadline: block.timestamp,
-                amountIn: amountIn / 2 + 1,
+                amountIn: amountIn / 2,
                 amountOutMinimum: 0
             })
         );
