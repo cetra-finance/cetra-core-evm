@@ -150,7 +150,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
 
         if (!s_liquidityTokenId) {
             s_lowerTick = ((currentTick - 400) / 10) * 10;
-            s_upperTick = ((currentTick + 800) / 10) * 10;
+            s_upperTick = ((currentTick + 400) / 10) * 10;
             (amount0, amount1) = calculateVirtPoolReserves(currentTick);
             usedLTV = s_targetLTV;
             s_liquidityTokenId = true;
@@ -186,7 +186,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 1e12) /
             PRECISION;
 
-        // console.log("WMATIC wanted to BORROW", wmaticToBorrow);
         i_aaveV3Pool.borrow(
             i_wmaticAddress,
             wmaticToBorrow,
@@ -194,11 +193,15 @@ contract ChamberV1 is IUniswapV3MintCallback {
             0,
             address(this)
         );
-        // console.log("MATIC BORROWED", getVWMATICTokenBalance());
 
-        // console.log("WETH wanted to BORROW", wethToBorrow);
-        i_aaveV3Pool.borrow(i_wethAddress, wethToBorrow, 2, 0, address(this));
-        // console.log("WETH BORROWED", getVWETHTokenBalance());
+        i_aaveV3Pool.borrow(
+            i_wethAddress,
+            wethToBorrow,
+            2,
+            0,
+            address(this)
+        );
+
         {
             uint256 wmaticRecieved = TransferHelper.safeGetBalance(
                 i_wmaticAddress,
@@ -559,20 +562,21 @@ contract ChamberV1 is IUniswapV3MintCallback {
         return (currentUSDBalance() * shares) / s_totalShares;
     }
 
-    function getTick() public view returns (int24 tick) {
+    function getTick() public view returns (int24) {
         (, int24 tick, , , , , ) = i_uniswapPool.slot0();
+        return tick;
     }
 
     function getUsdcOraclePrice() public view returns (uint256) {
-        return (i_aaveOracle.getAssetPrice(i_usdcAddress) * PRECISION) / 1e8;
+        return (i_aaveOracle.getAssetPrice(i_usdcAddress) * 1e10);
     }
 
     function getWethOraclePrice() public view returns (uint256) {
-        return (i_aaveOracle.getAssetPrice(i_wethAddress) * PRECISION) / 1e8;
+        return (i_aaveOracle.getAssetPrice(i_wethAddress) * 1e10);
     }
 
     function getWmaticOraclePrice() public view returns (uint256) {
-        return (i_aaveOracle.getAssetPrice(i_wmaticAddress) * PRECISION) / 1e8;
+        return (i_aaveOracle.getAssetPrice(i_wmaticAddress) * 1e10);
     }
 
     function _getPositionID() internal view returns (bytes32 positionID) {
