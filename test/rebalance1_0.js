@@ -186,6 +186,8 @@ describe("Basic tests new", function () {
             await chamber.getVWMATICTokenBalance(),
             await chamber.getVWETHTokenBalance()
         );
+        console.log("TotalShares");
+        console.log(await chamber.s_totalShares());
         console.log("LTV IS");
         console.log(await chamber.currentLTV());
 

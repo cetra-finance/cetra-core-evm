@@ -507,10 +507,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
             uint256 wmaticPoolBalance,
             uint256 wethPoolBalance
         ) = calculateCurrentPositionReserves();
-        console.log(wethPoolBalance);
-        console.log(getVWETHTokenBalance());
-        console.log(wmaticPoolBalance);
-        console.log(getVWMATICTokenBalance());
+
         return (getAUSDCTokenBalance() +
             TransferHelper.safeGetBalance(i_usdcAddress, address(this)) +
             ((wethPoolBalance - getVWETHTokenBalance()) *
