@@ -231,10 +231,8 @@ contract ChamberV1 is IUniswapV3MintCallback {
     }
 
     function burn(uint256 _shares) external {
-        uint256 usdcToReturn = 0;
 
-        console.log(s_userShares[msg.sender]);
-        console.log(_shares);
+        uint256 usdcToReturn = 0;
 
         (
             uint256 burnWMATIC,
@@ -308,8 +306,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 i_wmaticAddress,
                 wmaticDebtToCover - wmaticOwnedByUser
             );
-            console.log(wmaticOwnedByUser + TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) - wmaticBalanceBefore);
-            console.log(wmaticDebtToCover);
             if (
                 wmaticOwnedByUser +
                     TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) -
@@ -511,6 +507,10 @@ contract ChamberV1 is IUniswapV3MintCallback {
             uint256 wmaticPoolBalance,
             uint256 wethPoolBalance
         ) = calculateCurrentPositionReserves();
+        console.log(wethPoolBalance);
+        console.log(getVWETHTokenBalance());
+        console.log(wmaticPoolBalance);
+        console.log(getVWMATICTokenBalance());
         return (getAUSDCTokenBalance() +
             TransferHelper.safeGetBalance(i_usdcAddress, address(this)) +
             ((wethPoolBalance - getVWETHTokenBalance()) *

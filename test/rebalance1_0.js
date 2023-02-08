@@ -156,15 +156,20 @@ describe("Basic tests new", function () {
     });
 
     it("full circuit of withdrawals", async function () {
+        console.log("owner");
         const ownerUsdBalanceBefore = await usd.balanceOf(owner.address);
-        
-        await chamber.connect(owner).burn(1000 * 1000 * 1000);
-        
-        console.log("BALANCE AND SHARESWORTH OF OWNER are");
-        console.log(await chamber.s_userShares(owner.address));
-        console.log(
-            await chamber.sharesWorth(await chamber.s_userShares(owner.address))
-        );
+        await chamber.connect(owner).burn(await chamber.s_userShares(owner.address));
+        console.log("owner balance diff", (await usd.balanceOf(owner.address)).sub(ownerUsdBalanceBefore))
+
+        console.log("user1");
+        const user1UsdBalanceBefore = await usd.balanceOf(user1.address);
+        await chamber.connect(user1).burn(await chamber.s_userShares(user1.address));
+        console.log("user1 balance diff", (await usd.balanceOf(user1.address)).sub(user1UsdBalanceBefore))
+
+        console.log("user2");
+        const user2UsdBalanceBefore = await usd.balanceOf(user2.address);
+        await chamber.connect(user2).burn(await chamber.s_userShares(user2.address));
+        console.log("user2 balance diff", (await usd.balanceOf(user2.address)).sub(user2UsdBalanceBefore))
 
         console.log("TOKENS LEFT IN CONTRACT");
         console.log("usd", await usd.balanceOf(chamber.address));
@@ -186,22 +191,6 @@ describe("Basic tests new", function () {
 
         console.log("TOTAL USD BALANCE");
         console.log(await chamber.currentUSDBalance());
-        console.log("OWNER USD BALANCE DIFFERENCE");
-        console.log((await usd.balanceOf(owner.address)).sub(ownerUsdBalanceBefore))
-
-        console.log("user1.0");
-        const user1UsdBalanceBefore = await usd.balanceOf(user1.address);
-        await chamber.connect(user1).burn(1500 * 1000 * 1000);
-        console.log("user1.1");
-        await chamber.connect(user1).burn(1375129853);
-        console.log((await usd.balanceOf(user1.address)).sub(user1UsdBalanceBefore))
-        console.log("user2.0");
-        const user2UsdBalanceBefore = await usd.balanceOf(user2.address);
-        await chamber.connect(user2).burn(2500 * 1000 * 1000);
-        // console.log(await ethers.provider.getBlockNumber());
-        console.log("user2.1");
-        await chamber.connect(user2).burn(2275339688); 
-        console.log((await usd.balanceOf(user2.address)).sub(user2UsdBalanceBefore))
 
         console.log("-----------------------------------------------------");
     })
