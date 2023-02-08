@@ -189,6 +189,20 @@ describe("Basic tests new", function () {
         console.log("OWNER USD BALANCE DIFFERENCE");
         console.log((await usd.balanceOf(owner.address)).sub(ownerUsdBalanceBefore))
 
+        console.log("user1.0");
+        const user1UsdBalanceBefore = await usd.balanceOf(user1.address);
+        await chamber.connect(user1).burn(1500 * 1000 * 1000);
+        console.log("user1.1");
+        await chamber.connect(user1).burn(1375129853);
+        console.log((await usd.balanceOf(user1.address)).sub(user1UsdBalanceBefore))
+        console.log("user2.0");
+        const user2UsdBalanceBefore = await usd.balanceOf(user2.address);
+        await chamber.connect(user2).burn(2500 * 1000 * 1000);
+        // console.log(await ethers.provider.getBlockNumber());
+        console.log("user2.1");
+        await chamber.connect(user2).burn(2275339688); 
+        console.log((await usd.balanceOf(user2.address)).sub(user2UsdBalanceBefore))
+
         console.log("-----------------------------------------------------");
     })
 

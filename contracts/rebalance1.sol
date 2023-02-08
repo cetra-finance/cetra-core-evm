@@ -233,6 +233,9 @@ contract ChamberV1 is IUniswapV3MintCallback {
     function burn(uint256 _shares) external {
         uint256 usdcToReturn = 0;
 
+        console.log(s_userShares[msg.sender]);
+        console.log(_shares);
+
         (
             uint256 burnWMATIC,
             uint256 burnWETH,
@@ -305,6 +308,8 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 i_wmaticAddress,
                 wmaticDebtToCover - wmaticOwnedByUser
             );
+            console.log(wmaticOwnedByUser + TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) - wmaticBalanceBefore);
+            console.log(wmaticDebtToCover);
             if (
                 wmaticOwnedByUser +
                     TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) -
@@ -394,17 +399,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
         uint256 amountIn
     ) internal returns (uint256) {
 
-        uint256 amountOut0 = i_uniswapSwapRouter.exactInput(
-            ISwapRouter.ExactInputParams({
-                path: abi.encodePacked(assetIn, uint24(500), i_usdcAddress),
-                recipient: address(this),
-                deadline: block.timestamp,
-                amountIn: amountIn / 2,
-                amountOutMinimum: 0
-            })
-        );
-
-        uint256 amountOut1 = i_uniswapSwapRouter.exactInput(
+        uint256 amountOut = i_uniswapSwapRouter.exactInput(
             ISwapRouter.ExactInputParams({
                 path: abi.encodePacked(
                     assetIn,
@@ -415,11 +410,11 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 ),
                 recipient: address(this),
                 deadline: block.timestamp,
-                amountIn: amountIn / 2,
+                amountIn: amountIn,
                 amountOutMinimum: 0
             })
         );
-        return (amountOut0 + amountOut1);
+        return (amountOut);
     }
 
     function swapStableToExactAsset(
@@ -427,18 +422,8 @@ contract ChamberV1 is IUniswapV3MintCallback {
         address assetOther,
         uint256 amountOut
     ) internal returns (uint256) {
-        
-        uint256 amountIn0 = i_uniswapSwapRouter.exactOutput(
-            ISwapRouter.ExactOutputParams({
-                path: abi.encodePacked(i_usdcAddress, uint24(500), assetOut),
-                recipient: address(this),
-                deadline: block.timestamp,
-                amountOut: amountOut / 2 + 1,
-                amountInMaximum: type(uint128).max
-            })
-        );
 
-        uint256 amountIn1 = i_uniswapSwapRouter.exactOutput(
+        uint256 amountIn = i_uniswapSwapRouter.exactOutput(
             ISwapRouter.ExactOutputParams({
                 path: abi.encodePacked(
                     i_usdcAddress,
@@ -449,11 +434,11 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 ),
                 recipient: address(this),
                 deadline: block.timestamp,
-                amountOut: amountOut / 2 + 1,
-                amountInMaximum: type(uint128).max
+                amountOut: amountOut,
+                amountInMaximum: type(uint256).max
             })
         );
-        return (amountIn0 + amountIn1);
+        return (amountIn);
     }
 
     function swapAssetToExactAsset(
@@ -462,32 +447,23 @@ contract ChamberV1 is IUniswapV3MintCallback {
         uint256 amountOut
     ) internal returns (uint256) {
 
-        uint256 amountIn0 = i_uniswapSwapRouter.exactOutput(
+        uint256 amountIn = i_uniswapSwapRouter.exactOutput(
             ISwapRouter.ExactOutputParams({
                 path: abi.encodePacked(
-                    assetIn,
+                    assetOut,
                     uint24(500),
                     i_usdcAddress,
                     uint24(500),
-                    assetOut
+                    assetIn
                 ),
                 recipient: address(this),
                 deadline: block.timestamp,
-                amountOut: amountOut / 2 + 1,
-                amountInMaximum: type(uint128).max
+                amountOut: amountOut,
+                amountInMaximum: type(uint256).max
             })
         );
 
-        uint256 amountIn1 = i_uniswapSwapRouter.exactOutput(
-            ISwapRouter.ExactOutputParams({
-                path: abi.encodePacked(assetIn, uint24(500), assetOut),
-                recipient: address(this),
-                deadline: block.timestamp,
-                amountOut: amountOut / 2 - 1,
-                amountInMaximum: type(uint128).max
-            })
-        );
-        return (amountIn0 + amountIn1);
+        return (amountIn);
     }
 
     function _withdraw(
