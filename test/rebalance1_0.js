@@ -3,6 +3,7 @@ const { BigNumber, utils } = require("ethers");
 const { ethers, upgrades } = require("hardhat");
 const { networkConfig } = require("../helper-hardhat-config");
 const helpers = require("@nomicfoundation/hardhat-network-helpers");
+const { mine } = require("@nomicfoundation/hardhat-network-helpers");
 
 describe("Basic tests new", function () {
     let owner, _, user1, user2;
@@ -97,10 +98,30 @@ describe("Basic tests new", function () {
         console.log(await chamber.currentLTV());
         console.log("IN POOL");
         console.log(await chamber.calculateCurrentPositionReserves());
+
+        console.log("DEBT TOKENS ");
+        console.log(
+            await chamber.getVWMATICTokenBalance(),
+            await chamber.getVWETHTokenBalance()
+        );
+        console.log("TOTAL USD BALANCE");
+        console.log(await chamber.currentUSDBalance());
+
         console.log("USER1 DEPOSITS 1500$");
         await chamber.connect(user1).mint(1500 * 1000 * 1000);
         console.log("LTV IS");
         console.log(await chamber.currentLTV());
+        console.log("IN POOL");
+        console.log(await chamber.calculateCurrentPositionReserves());
+        
+        console.log("DEBT TOKENS ");
+        console.log(
+            await chamber.getVWMATICTokenBalance(),
+            await chamber.getVWETHTokenBalance()
+        );
+        console.log("TOTAL USD BALANCE");
+        console.log(await chamber.currentUSDBalance());
+
         console.log("USER2 DEPOSITS 2500$");
         await chamber.connect(user2).mint(2500 * 1000 * 1000);
         console.log("LTV IS");
@@ -152,21 +173,24 @@ describe("Basic tests new", function () {
 
         console.log("TOTAL USD BALANCE");
         console.log(await chamber.currentUSDBalance());
+        mine(1000);
+        console.log("TOTAL USD BALANCE");
+        console.log(await chamber.currentUSDBalance());
         console.log("-----------------------------------------------------");
     });
 
     it("full circuit of withdrawals", async function () {
-        console.log("owner");
+
         const ownerUsdBalanceBefore = await usd.balanceOf(owner.address);
         await chamber.connect(owner).burn(await chamber.s_userShares(owner.address));
         console.log("owner balance diff", (await usd.balanceOf(owner.address)).sub(ownerUsdBalanceBefore))
+        console.log("-----------------");
 
-        console.log("user1");
         const user1UsdBalanceBefore = await usd.balanceOf(user1.address);
         await chamber.connect(user1).burn(await chamber.s_userShares(user1.address));
         console.log("user1 balance diff", (await usd.balanceOf(user1.address)).sub(user1UsdBalanceBefore))
+        console.log("-----------------");
 
-        console.log("user2");
         const user2UsdBalanceBefore = await usd.balanceOf(user2.address);
         await chamber.connect(user2).burn(await chamber.s_userShares(user2.address));
         console.log("user2 balance diff", (await usd.balanceOf(user2.address)).sub(user2UsdBalanceBefore))
@@ -176,6 +200,7 @@ describe("Basic tests new", function () {
         console.log("weth", await weth.balanceOf(chamber.address));
         console.log("matic", await ethers.provider.getBalance(chamber.address));
         console.log("wmatic", await wmatic.balanceOf(chamber.address))
+        console.log("TotalShares", await chamber.s_totalShares());
         console.log("TOKENS IN UNI POSITION");
         console.log(await chamber.calculateCurrentPositionReserves());
         console.log("TOKENS IN AAVE POSITION");
@@ -186,8 +211,6 @@ describe("Basic tests new", function () {
             await chamber.getVWMATICTokenBalance(),
             await chamber.getVWETHTokenBalance()
         );
-        console.log("TotalShares");
-        console.log(await chamber.s_totalShares());
         console.log("LTV IS");
         console.log(await chamber.currentLTV());
 
