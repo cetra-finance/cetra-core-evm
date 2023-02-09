@@ -136,7 +136,7 @@ describe("Basic tests new", function () {
         console.log(await chamber.currentLTV());
         console.log("IN POOL");
         console.log(await chamber.calculateCurrentPositionReserves());
-        
+
         console.log("DEBT TOKENS ");
         console.log(
             await chamber.getVWMATICTokenBalance(),
@@ -196,16 +196,14 @@ describe("Basic tests new", function () {
 
         console.log("TOTAL USD BALANCE");
         console.log(await chamber.currentUSDBalance());
-        mine(20000);
+        //mine(20000);
         console.log("TOTAL USD BALANCE");
         console.log(await chamber.currentUSDBalance());
         console.log("-----------------------------------------------------");
     });
 
     it("full circuit of withdrawals", async function () {
-
         const ownerUsdBalanceBefore = await usd.balanceOf(owner.address);
-
         await chamber
             .connect(owner)
             .burn(await chamber.s_userShares(owner.address));

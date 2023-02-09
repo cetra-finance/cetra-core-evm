@@ -2,6 +2,8 @@
 pragma solidity >=0.8.0;
 pragma abicoder v2;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import "./Uniswap/utils/LiquidityAmounts.sol";
 import "./Uniswap/interfaces/ISwapRouter.sol";
 import "./Uniswap/interfaces/IUniswapV3Pool.sol";
@@ -132,7 +134,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
     function mint(uint256 usdAmount) external {
         {
             uint256 currUsdBalance = currentUSDBalance();
-            console.log("currUsdBalance", currUsdBalance);
             uint256 sharesToMint = (currUsdBalance != 0)
                 ? ((usdAmount * s_totalShares) / (currUsdBalance))
                 : usdAmount;
@@ -263,14 +264,12 @@ contract ChamberV1 is IUniswapV3MintCallback {
             if (wmaticRemainder > 0) {
                 usdcToReturn += swapExactAssetToStable(
                     i_wmaticAddress,
-                    i_wethAddress,
                     wmaticRemainder
                 );
             }
             if (wethRemainder > 0) {
                 usdcToReturn += swapExactAssetToStable(
                     i_wethAddress,
-                    i_wmaticAddress,
                     wethRemainder
                 );
             }
@@ -311,7 +310,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
         uint256 usdcSwapped = 0;
 
         uint256 _currentLTV = currentLTV();
-
         if (wmaticOwnedByUser < wmaticDebtToCover) {
             wethSwapped += swapAssetToExactAsset(
                 i_wethAddress,
@@ -329,7 +327,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
             ) {
                 revert ChamberV1__SwappedWethForWmaticStillCantRepay();
             } else {
-                console.log("wmaticDebtToCover", wmaticDebtToCover);
                 i_aaveV3Pool.repay(
                     i_wmaticAddress,
                     wmaticDebtToCover,
@@ -344,7 +341,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
             }
             wmaticRemainder = 0;
         } else {
-            console.log("wmaticDebtToCover", wmaticDebtToCover);
             i_aaveV3Pool.repay(
                 i_wmaticAddress,
                 wmaticDebtToCover,
@@ -354,26 +350,15 @@ contract ChamberV1 is IUniswapV3MintCallback {
             wmaticRemainder = wmaticOwnedByUser - wmaticDebtToCover;
         }
 
-        console.log(
-            (((1e6 * wmaticDebtToCover * getWmaticOraclePrice()) /
-                getUsdcOraclePrice()) / _currentLTV)
-        );
-
         i_aaveV3Pool.withdraw(
             i_usdcAddress,
             (((1e6 * wmaticDebtToCover * getWmaticOraclePrice()) /
                 getUsdcOraclePrice()) / _currentLTV),
             address(this)
         );
-        console.log(
-            TransferHelper.safeGetBalance(i_usdcAddress, address(this))
-        );
-
-        if (wethOwnedByUser + 1e12 < wethDebtToCover + wethSwapped) {
-            console.log((wethDebtToCover + wethSwapped - wethOwnedByUser));
+        if (wethOwnedByUser < wethDebtToCover + wethSwapped) {
             usdcSwapped += swapStableToExactAsset(
                 i_wethAddress,
-                i_wmaticAddress,
                 wethDebtToCover + wethSwapped - wethOwnedByUser
             );
             if (
@@ -386,7 +371,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
             ) {
                 revert ChamberV1__SwappedUsdcForWethStillCantRepay();
             } else {
-                console.log("wethDebtToCover", wethDebtToCover);
                 i_aaveV3Pool.repay(
                     i_wethAddress,
                     wethDebtToCover,
@@ -401,7 +385,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
             }
             wethRemainder = 0;
         } else {
-            console.log("wethDebtToCover", wethDebtToCover);
             i_aaveV3Pool.repay(
                 i_wethAddress,
                 wethDebtToCover,
@@ -423,18 +406,11 @@ contract ChamberV1 is IUniswapV3MintCallback {
 
     function swapExactAssetToStable(
         address assetIn,
-        address assetOther,
         uint256 amountIn
     ) internal returns (uint256) {
         uint256 amountOut = i_uniswapSwapRouter.exactInput(
             ISwapRouter.ExactInputParams({
-                path: abi.encodePacked(
-                    assetIn,
-                    uint24(500),
-                    assetOther,
-                    uint24(500),
-                    i_usdcAddress
-                ),
+                path: abi.encodePacked(assetIn, uint24(500), i_usdcAddress),
                 recipient: address(this),
                 deadline: block.timestamp,
                 amountIn: amountIn,
@@ -446,22 +422,19 @@ contract ChamberV1 is IUniswapV3MintCallback {
 
     function swapStableToExactAsset(
         address assetOut,
-        address assetOther,
         uint256 amountOut
     ) internal returns (uint256) {
+        IERC20(i_usdcAddress).approve(
+            address(i_uniswapSwapRouter),
+            type(uint256).max
+        );
         uint256 amountIn = i_uniswapSwapRouter.exactOutput(
             ISwapRouter.ExactOutputParams({
-                path: abi.encodePacked(
-                    i_usdcAddress,
-                    uint24(500),
-                    assetOther,
-                    uint24(500),
-                    assetOut
-                ),
+                path: abi.encodePacked(assetOut, uint24(500), i_usdcAddress),
                 recipient: address(this),
                 deadline: block.timestamp,
                 amountOut: amountOut,
-                amountInMaximum: type(uint256).max
+                amountInMaximum: 1e50
             })
         );
         return (amountIn);
