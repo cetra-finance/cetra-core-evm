@@ -72,18 +72,41 @@ describe("Basic tests new", function () {
             .connect(user2)
             .approve(chamber.address, 1000 * 1000 * 1000 * 1000 * 1000);
 
-        await chamber.connect(owner).giveApprove(usd.address, currNetworkConfig.aaveV3PoolAddress);
-        await chamber.connect(owner).giveApprove(usd.address, currNetworkConfig.uniswapRouterAddress);
-        await chamber.connect(owner).giveApprove(usd.address, currNetworkConfig.uniswapPoolAddress);
-        await chamber.connect(owner).giveApprove(usd.address, currNetworkConfig.aaveVWETHAddress);
+        await chamber
+            .connect(owner)
+            .giveApprove(usd.address, currNetworkConfig.aaveV3PoolAddress);
+        await chamber
+            .connect(owner)
+            .giveApprove(usd.address, currNetworkConfig.uniswapRouterAddress);
+        await chamber
+            .connect(owner)
+            .giveApprove(usd.address, currNetworkConfig.uniswapPoolAddress);
+        await chamber
+            .connect(owner)
+            .giveApprove(usd.address, currNetworkConfig.aaveVWETHAddress);
 
-        await chamber.connect(owner).giveApprove(weth.address, currNetworkConfig.aaveV3PoolAddress);
-        await chamber.connect(owner).giveApprove(weth.address, currNetworkConfig.uniswapRouterAddress);
-        await chamber.connect(owner).giveApprove(weth.address, currNetworkConfig.uniswapPoolAddress);
-        await chamber.connect(owner).giveApprove(weth.address, currNetworkConfig.aaveVWETHAddress);
+        await chamber
+            .connect(owner)
+            .giveApprove(weth.address, currNetworkConfig.aaveV3PoolAddress);
+        await chamber
+            .connect(owner)
+            .giveApprove(weth.address, currNetworkConfig.uniswapRouterAddress);
+        await chamber
+            .connect(owner)
+            .giveApprove(weth.address, currNetworkConfig.uniswapPoolAddress);
+        await chamber
+            .connect(owner)
+            .giveApprove(weth.address, currNetworkConfig.aaveVWETHAddress);
 
-        await chamber.connect(owner).giveApprove(wmatic.address, currNetworkConfig.aaveV3PoolAddress);
-        await chamber.connect(owner).giveApprove(wmatic.address, currNetworkConfig.uniswapRouterAddress);
+        await chamber
+            .connect(owner)
+            .giveApprove(wmatic.address, currNetworkConfig.aaveV3PoolAddress);
+        await chamber
+            .connect(owner)
+            .giveApprove(
+                wmatic.address,
+                currNetworkConfig.uniswapRouterAddress
+            );
 
         console.log(`Owner's address is ${owner.address}`);
         console.log(
@@ -157,7 +180,7 @@ describe("Basic tests new", function () {
         console.log("usd", await usd.balanceOf(chamber.address));
         console.log("weth", await weth.balanceOf(chamber.address));
         console.log("matic", await ethers.provider.getBalance(chamber.address));
-        console.log("wmatic", await wmatic.balanceOf(chamber.address))
+        console.log("wmatic", await wmatic.balanceOf(chamber.address));
         console.log("TOKENS IN UNI POSITION");
         console.log(await chamber.calculateCurrentPositionReserves());
         console.log("TOKENS IN AAVE POSITION");
@@ -182,25 +205,40 @@ describe("Basic tests new", function () {
     it("full circuit of withdrawals", async function () {
 
         const ownerUsdBalanceBefore = await usd.balanceOf(owner.address);
-        await chamber.connect(owner).burn(await chamber.s_userShares(owner.address));
-        console.log("owner balance diff", (await usd.balanceOf(owner.address)).sub(ownerUsdBalanceBefore))
-        console.log("-----------------");
+
+        await chamber
+            .connect(owner)
+            .burn(await chamber.s_userShares(owner.address));
+        console.log(
+            "owner balance diff",
+            (await usd.balanceOf(owner.address)).sub(ownerUsdBalanceBefore)
+        );
 
         const user1UsdBalanceBefore = await usd.balanceOf(user1.address);
-        await chamber.connect(user1).burn(await chamber.s_userShares(user1.address));
-        console.log("user1 balance diff", (await usd.balanceOf(user1.address)).sub(user1UsdBalanceBefore))
-        console.log("-----------------");
+
+        await chamber
+            .connect(user1)
+            .burn(await chamber.s_userShares(user1.address));
+        console.log(
+            "user1 balance diff",
+            (await usd.balanceOf(user1.address)).sub(user1UsdBalanceBefore)
+        );
 
         const user2UsdBalanceBefore = await usd.balanceOf(user2.address);
-        await chamber.connect(user2).burn(await chamber.s_userShares(user2.address));
-        console.log("user2 balance diff", (await usd.balanceOf(user2.address)).sub(user2UsdBalanceBefore))
+        await chamber
+            .connect(user2)
+            .burn(await chamber.s_userShares(user2.address));
+        console.log(
+            "user2 balance diff",
+            (await usd.balanceOf(user2.address)).sub(user2UsdBalanceBefore)
+        );
 
         console.log("TOKENS LEFT IN CONTRACT");
         console.log("usd", await usd.balanceOf(chamber.address));
         console.log("weth", await weth.balanceOf(chamber.address));
         console.log("matic", await ethers.provider.getBalance(chamber.address));
-        console.log("wmatic", await wmatic.balanceOf(chamber.address))
-        console.log("TotalShares", await chamber.s_totalShares());
+        console.log("wmatic", await wmatic.balanceOf(chamber.address));
+
         console.log("TOKENS IN UNI POSITION");
         console.log(await chamber.calculateCurrentPositionReserves());
         console.log("TOKENS IN AAVE POSITION");
@@ -215,9 +253,8 @@ describe("Basic tests new", function () {
         console.log(await chamber.currentLTV());
 
         console.log("TOTAL USD BALANCE");
-        console.log(await chamber.currentUSDBalance());
+        console.log((await chamber.currentUSDBalance()).toString());
 
         console.log("-----------------------------------------------------");
-    })
-
+    });
 });
