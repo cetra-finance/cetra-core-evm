@@ -6,8 +6,23 @@ const helpers = require("@nomicfoundation/hardhat-network-helpers");
 const { mine } = require("@nomicfoundation/hardhat-network-helpers");
 
 describe("Basic tests new", function () {
-    let owner, _, user1, user2;
+    let owner, _, user1, user2, donorWallet;
     let usd, weth;
+
+    const makeSwap = async(user, amount) => {
+        UniRouter = await ethers.getContractAt("ISwapRouter", networkConfig[network.config.chainId].uniswapRouterAddress)
+        await usd.connect(user).approve(UniRouter.address, 100000000 * 1000000);
+        await UniRouter.connect(user).exactInput(
+            {
+                path: ethers.utils.solidityPack(["address", "uint24", "address"], [networkConfig[network.config.chainId].usdcAddress, 3000, networkConfig[network.config.chainId].wethAddress]),
+                recipient: user.address,
+                deadline: (await ethers.provider.getBlock("latest")).timestamp + 10000,
+                amountIn: amount * 1000000,
+                amountOutMinimum: 0
+            },
+        )
+    }
+
 
     before(async () => {
         console.log("DEPLOYING VAULT, FUNDING USER ACCOUNTS...");
@@ -48,7 +63,7 @@ describe("Basic tests new", function () {
         await chamber.deployed();
 
         await helpers.impersonateAccount(currNetworkConfig.donorWalletAddress);
-        let donorWallet = await ethers.getSigner(
+        donorWallet = await ethers.getSigner(
             currNetworkConfig.donorWalletAddress
         );
 
@@ -120,7 +135,7 @@ describe("Basic tests new", function () {
         console.log("LTV IS");
         console.log(await chamber.currentLTV());
         console.log("IN POOL");
-        console.log(await chamber.calculateCurrentPositionReserves());
+        console.log(await chamber.calculateCurrentPoolReserves());
 
         console.log("DEBT TOKENS ");
         console.log(
@@ -135,7 +150,7 @@ describe("Basic tests new", function () {
         console.log("LTV IS");
         console.log(await chamber.currentLTV());
         console.log("IN POOL");
-        console.log(await chamber.calculateCurrentPositionReserves());
+        console.log(await chamber.calculateCurrentPoolReserves());
 
         console.log("DEBT TOKENS ");
         console.log(
@@ -182,7 +197,7 @@ describe("Basic tests new", function () {
         console.log("matic", await ethers.provider.getBalance(chamber.address));
         console.log("wmatic", await wmatic.balanceOf(chamber.address));
         console.log("TOKENS IN UNI POSITION");
-        console.log(await chamber.calculateCurrentPositionReserves());
+        console.log(await chamber.calculateCurrentPoolReserves());
         console.log("TOKENS IN AAVE POSITION");
         console.log("COLLATERAL TOKENS ");
         console.log(await chamber.getAUSDCTokenBalance());
@@ -196,7 +211,9 @@ describe("Basic tests new", function () {
 
         console.log("TOTAL USD BALANCE");
         console.log(await chamber.currentUSDBalance());
-        //mine(20000);
+
+        await makeSwap(donorWallet, 1500000);
+
         console.log("TOTAL USD BALANCE");
         console.log(await chamber.currentUSDBalance());
         console.log("-----------------------------------------------------");
@@ -238,7 +255,7 @@ describe("Basic tests new", function () {
         console.log("wmatic", await wmatic.balanceOf(chamber.address));
 
         console.log("TOKENS IN UNI POSITION");
-        console.log(await chamber.calculateCurrentPositionReserves());
+        console.log(await chamber.calculateCurrentPoolReserves());
         console.log("TOKENS IN AAVE POSITION");
         console.log("COLLATERAL TOKENS ");
         console.log(await chamber.getAUSDCTokenBalance());

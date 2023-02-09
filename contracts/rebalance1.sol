@@ -481,6 +481,8 @@ contract ChamberV1 is IUniswapV3MintCallback {
             s_upperTick,
             liquidityToBurn
         );
+        // maybe should make function "collectAndReinvest" to call it before withdraws.
+        // And although make it available for harvesters to reinvest for fee
         i_uniswapPool.collect(
             address(this),
             s_lowerTick,
@@ -504,7 +506,41 @@ contract ChamberV1 is IUniswapV3MintCallback {
         return (burnWMATIC, burnWETH, feeWMATIC, feeWETH);
     }
 
-    function rebalance() external {}
+    function rebalance() public {
+        _rebalance();
+    }
+
+    function _rebalance() internal {
+        (
+            uint256 wmaticPoolBalance,
+            uint256 wethPoolBalance
+        ) = calculateCurrentPoolReserves();
+        uint256 wmaticPrice = getWmaticOraclePrice();
+        uint256 wethPrice = getWethOraclePrice();
+
+        uint256 wmaticToBurn = ((((getVWMATICTokenBalance() +
+            (wmaticPoolBalance * (PRECISION - s_targetLTV)) /
+            PRECISION) * wmaticPrice) /
+            PRECISION /
+            1e12 +
+            ((getVWETHTokenBalance() +
+                (wethPoolBalance * (PRECISION - s_targetLTV)) /
+                PRECISION) * wethPrice) /
+            PRECISION /
+            1e12 -
+            (getAUSDCTokenBalance() * getWethOraclePrice()) /
+            PRECISION) *
+            PRECISION *
+            1e12) /
+            ((wmaticPrice * wmaticPoolBalance) / wethPoolBalance + wethPrice);
+        // uint256 wethToBurn = (wmaticToBurn * wethPoolBalance) /
+        //     wmaticPoolBalance;
+
+        console.log(
+            wmaticToBurn,
+            (wmaticToBurn * wethPoolBalance) / wmaticPoolBalance
+        );
+    }
 
     // =================================
     // FallBack
@@ -520,41 +556,26 @@ contract ChamberV1 is IUniswapV3MintCallback {
         (
             uint256 wmaticPoolBalance,
             uint256 wethPoolBalance
-        ) = calculateCurrentPositionReserves();
-
+        ) = calculateCurrentPoolReserves();
+        (
+            uint256 wmaticFeePending,
+            uint256 wethFeePending
+        ) = calculateCurrentFees();
         uint256 pureUSDCAmount = getAUSDCTokenBalance() +
             TransferHelper.safeGetBalance(i_usdcAddress, address(this));
-
-        return (
-            wethPoolBalance *
-                getWethOraclePrice() +
-                wmaticPoolBalance *
-                getWmaticOraclePrice() >
-                getVWETHTokenBalance() *
-                    getWethOraclePrice() +
-                    getVWMATICTokenBalance() *
-                    getWmaticOraclePrice()
-                ? pureUSDCAmount +
-                    (((wethPoolBalance *
-                        getWethOraclePrice() +
-                        wmaticPoolBalance *
-                        getWmaticOraclePrice()) -
-                        (getVWETHTokenBalance() *
-                            getWethOraclePrice() +
-                            getVWMATICTokenBalance() *
-                            getWmaticOraclePrice())) / getUsdcOraclePrice()) /
-                    1e12
-                : pureUSDCAmount -
-                    (((getVWETHTokenBalance() *
-                        getWethOraclePrice() +
-                        getVWMATICTokenBalance() *
-                        getWmaticOraclePrice()) -
-                        (wethPoolBalance *
-                            getWethOraclePrice() +
-                            wmaticPoolBalance *
-                            getWmaticOraclePrice())) / getUsdcOraclePrice()) /
-                    1e12
-        );
+        uint256 poolTokensValue = ((wethPoolBalance + wethFeePending) *
+            getWethOraclePrice() +
+            (wmaticPoolBalance + wmaticFeePending) *
+            getWmaticOraclePrice()) /
+            getUsdcOraclePrice() /
+            1e12;
+        uint256 debtTokensValue = (getVWETHTokenBalance() *
+            getWethOraclePrice() +
+            getVWMATICTokenBalance() *
+            getWmaticOraclePrice()) /
+            getUsdcOraclePrice() /
+            1e12;
+        return pureUSDCAmount + poolTokensValue - debtTokensValue;
     }
 
     function currentLTV() public view returns (uint256) {
@@ -598,7 +619,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
             );
     }
 
-    function calculateCurrentPositionReserves()
+    function calculateCurrentPoolReserves()
         public
         view
         returns (uint256 amount0Current, uint256 amount1Current)
@@ -621,32 +642,37 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 liquidity
             );
 
-        // compute current fees earned
+        return (amount0Current, amount1Current);
+    }
+
+    function calculateCurrentFees()
+        private
+        view
+        returns (uint256 fee0, uint256 fee1)
+    {
+        (uint160 sqrtRatioX96, int24 tick, , , , , ) = i_uniswapPool.slot0();
+        (
+            uint128 liquidity,
+            uint256 feeGrowthInside0Last,
+            uint256 feeGrowthInside1Last,
+            uint128 tokensOwed0,
+            uint128 tokensOwed1
+        ) = i_uniswapPool.positions(_getPositionID());
         uint256 fee0 = _computeFeesEarned(
             true,
             feeGrowthInside0Last,
             tick,
             liquidity
         ) + uint256(tokensOwed0);
+
         uint256 fee1 = _computeFeesEarned(
             false,
             feeGrowthInside1Last,
             tick,
             liquidity
         ) + uint256(tokensOwed1);
-
-        /**TODO: add performance fee subtraction */
-        //(fee0, fee1) = _subtractAdminFees(fee0, fee1);
-
-        // add any leftover in contract to current holdings
-        amount0Current +=
-            fee0 +
-            TransferHelper.safeGetBalance(i_wmaticAddress, address(this));
-        amount1Current +=
-            fee1 +
-            TransferHelper.safeGetBalance(i_wethAddress, address(this));
-
-        return (amount0Current, amount1Current);
+        console.log("FEES ARE", fee0, fee1);
+        return (fee0, fee1);
     }
 
     function _computeFeesEarned(
