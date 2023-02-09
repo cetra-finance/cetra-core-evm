@@ -17,15 +17,15 @@ describe("Basic tests new", function () {
         user1 = accounts[1];
         user2 = accounts[2];
         usd = await ethers.getContractAt(
-            "ERC20",
+            "IERC20",
             currNetworkConfig.usdcAddress
         );
         weth = await ethers.getContractAt(
-            "ERC20",
+            "IERC20",
             currNetworkConfig.wethAddress
         );
         wmatic = await ethers.getContractAt(
-            "ERC20",
+            "IERC20",
             currNetworkConfig.wmaticAddress
         );
         const chamberFactory = await ethers.getContractFactory("ChamberV1");
@@ -196,7 +196,7 @@ describe("Basic tests new", function () {
 
         console.log("TOTAL USD BALANCE");
         console.log(await chamber.currentUSDBalance());
-        mine(1000);
+        mine(20000);
         console.log("TOTAL USD BALANCE");
         console.log(await chamber.currentUSDBalance());
         console.log("-----------------------------------------------------");
