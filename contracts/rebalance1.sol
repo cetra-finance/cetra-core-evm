@@ -132,6 +132,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
     function mint(uint256 usdAmount) external {
         {
             uint256 currUsdBalance = currentUSDBalance();
+            console.log("currUsdBalance", currUsdBalance);
             uint256 sharesToMint = (currUsdBalance != 0)
                 ? ((usdAmount * s_totalShares) / (currUsdBalance))
                 : usdAmount;
@@ -328,6 +329,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
             ) {
                 revert ChamberV1__SwappedWethForWmaticStillCantRepay();
             } else {
+                console.log("wmaticDebtToCover", wmaticDebtToCover);
                 i_aaveV3Pool.repay(
                     i_wmaticAddress,
                     wmaticDebtToCover,
@@ -342,6 +344,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
             }
             wmaticRemainder = 0;
         } else {
+            console.log("wmaticDebtToCover", wmaticDebtToCover);
             i_aaveV3Pool.repay(
                 i_wmaticAddress,
                 wmaticDebtToCover,
@@ -383,6 +386,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
             ) {
                 revert ChamberV1__SwappedUsdcForWethStillCantRepay();
             } else {
+                console.log("wethDebtToCover", wethDebtToCover);
                 i_aaveV3Pool.repay(
                     i_wethAddress,
                     wethDebtToCover,
@@ -397,6 +401,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
             }
             wethRemainder = 0;
         } else {
+            console.log("wethDebtToCover", wethDebtToCover);
             i_aaveV3Pool.repay(
                 i_wethAddress,
                 wethDebtToCover,
@@ -540,9 +545,10 @@ contract ChamberV1 is IUniswapV3MintCallback {
 
     function currentUSDBalance() public view returns (uint256) {
         (
-            uint256 wmaticPoolBalance,
-            uint256 wethPoolBalance
+            uint256 wmaticFee,
+            uint256 wethFee
         ) = calculateCurrentPositionReserves();
+
         uint256 pureUSDCAmount = getAUSDCTokenBalance() +
             TransferHelper.safeGetBalance(i_usdcAddress, address(this));
 
@@ -659,15 +665,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
         /**TODO: add performance fee subtraction */
         //(fee0, fee1) = _subtractAdminFees(fee0, fee1);
 
-        // add any leftover in contract to current holdings
-        amount0Current +=
-            fee0 +
-            TransferHelper.safeGetBalance(i_wmaticAddress, address(this));
-        amount1Current +=
-            fee1 +
-            TransferHelper.safeGetBalance(i_wethAddress, address(this));
-
-        return (amount0Current, amount1Current);
+        return (fee0, fee1);
     }
 
     function _computeFeesEarned(
