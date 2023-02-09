@@ -507,10 +507,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
     }
 
     function rebalance() public {
-        _rebalance();
-    }
-
-    function _rebalance() internal {
         (
             uint256 wmaticPoolBalance,
             uint256 wethPoolBalance
