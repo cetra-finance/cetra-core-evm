@@ -12,15 +12,26 @@ describe("Basic tests new", function () {
     const makeSwap = async(user, amount) => {
         UniRouter = await ethers.getContractAt("ISwapRouter", networkConfig[network.config.chainId].uniswapRouterAddress)
         await usd.connect(user).approve(UniRouter.address, 100000000 * 1000000);
+
+        console.log("SWAPPING")
+        console.log(await wmatic.balanceOf(user.address));
+        console.log(await wmatic.balanceOf(networkConfig[network.config.chainId].uniswapPoolAddress));
+        console.log(await weth.balanceOf(networkConfig[network.config.chainId].uniswapPoolAddress));
+
         await UniRouter.connect(user).exactInput(
             {
-                path: ethers.utils.solidityPack(["address", "uint24", "address"], [networkConfig[network.config.chainId].usdcAddress, 3000, networkConfig[network.config.chainId].wethAddress]),
+                path: ethers.utils.solidityPack(["address", "uint24", "address", "uint24", "address"], [networkConfig[network.config.chainId].usdcAddress, 500, networkConfig[network.config.chainId].wethAddress, 3000, networkConfig[network.config.chainId].wmaticAddress]),
                 recipient: user.address,
                 deadline: (await ethers.provider.getBlock("latest")).timestamp + 10000,
                 amountIn: amount * 1000000,
                 amountOutMinimum: 0
             },
         )
+
+        console.log(await wmatic.balanceOf(user.address));
+        console.log(await wmatic.balanceOf(networkConfig[network.config.chainId].uniswapPoolAddress));
+        console.log(await weth.balanceOf(networkConfig[network.config.chainId].uniswapPoolAddress));
+
     }
 
 
