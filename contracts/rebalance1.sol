@@ -751,7 +751,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
         fee1 =
             _computeFeesEarned(false, feeGrowthInside1Last, tick, liquidity) +
             uint256(tokensOwed1);
-        console.log("FEES ARE", fee0, fee1);
     }
 
     function _computeFeesEarned(
