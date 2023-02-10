@@ -570,14 +570,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
             wethToWithdrawFromPool
         );
 
-        i_uniswapPool.burn(s_lowerTick, s_upperTick, liquidityToBurn);
-        i_uniswapPool.collect(
-            address(this),
-            s_lowerTick,
-            s_upperTick,
-            type(uint128).max,
-            type(uint128).max
-        );
+        _withdraw(liquidityToBurn, 0);
 
         uint256 wmaticToRepay = wmaticPoolBalance -
             getVWMATICTokenBalance() -
