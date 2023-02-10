@@ -9,28 +9,32 @@ describe("Basic tests new", function () {
     let owner, _, user1, user2, donorWallet;
     let usd, weth;
 
-    const makeSwap = async(user, amount) => {
+    const makeSwap = async(user, amount, way) => {
         UniRouter = await ethers.getContractAt("ISwapRouter", networkConfig[network.config.chainId].uniswapRouterAddress)
         await usd.connect(user).approve(UniRouter.address, 100000000 * 1000000);
+        await wmatic.connect(user).approve(UniRouter.address,  ethers.utils.parseEther("100000000000000"));
 
-        console.log("SWAPPING")
-        console.log(await wmatic.balanceOf(user.address));
-        console.log(await wmatic.balanceOf(networkConfig[network.config.chainId].uniswapPoolAddress));
-        console.log(await weth.balanceOf(networkConfig[network.config.chainId].uniswapPoolAddress));
-
-        await UniRouter.connect(user).exactInput(
-            {
-                path: ethers.utils.solidityPack(["address", "uint24", "address", "uint24", "address"], [networkConfig[network.config.chainId].usdcAddress, 500, networkConfig[network.config.chainId].wethAddress, 3000, networkConfig[network.config.chainId].wmaticAddress]),
-                recipient: user.address,
-                deadline: (await ethers.provider.getBlock("latest")).timestamp + 10000,
-                amountIn: amount * 1000000,
-                amountOutMinimum: 0
-            },
-        )
-
-        console.log(await wmatic.balanceOf(user.address));
-        console.log(await wmatic.balanceOf(networkConfig[network.config.chainId].uniswapPoolAddress));
-        console.log(await weth.balanceOf(networkConfig[network.config.chainId].uniswapPoolAddress));
+        if (way) {
+            await UniRouter.connect(user).exactInput(
+                {
+                    path: ethers.utils.solidityPack(["address", "uint24", "address", "uint24", "address"], [networkConfig[network.config.chainId].usdcAddress, 500, networkConfig[network.config.chainId].wethAddress, 500, networkConfig[network.config.chainId].wmaticAddress]),
+                    recipient: user.address,
+                    deadline: (await ethers.provider.getBlock("latest")).timestamp + 10000,
+                    amountIn: amount * 1000000,
+                    amountOutMinimum: 0
+                },
+            )
+        } else {
+            await UniRouter.connect(user).exactInput(
+                {
+                    path: ethers.utils.solidityPack(["address", "uint24", "address", "uint24", "address"], [networkConfig[network.config.chainId].wmaticAddress, 500, networkConfig[network.config.chainId].wethAddress, 500, networkConfig[network.config.chainId].usdcAddress]),
+                    recipient: user.address,
+                    deadline: (await ethers.provider.getBlock("latest")).timestamp + 10000,
+                    amountIn: ethers.utils.parseEther(amount.toString()),
+                    amountOutMinimum: 0
+                },
+            )
+        }
 
     }
 
@@ -223,7 +227,10 @@ describe("Basic tests new", function () {
         console.log("TOTAL USD BALANCE");
         console.log(await chamber.currentUSDBalance());
 
-        await makeSwap(donorWallet, 1500000);
+        for (let i = 0; i < 40; i++) {
+            await makeSwap(donorWallet, 100000, true);
+            await makeSwap(donorWallet, 70000, false);
+        }
 
         console.log("TOTAL USD BALANCE");
         console.log(await chamber.currentUSDBalance());

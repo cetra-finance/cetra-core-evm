@@ -157,8 +157,8 @@ contract ChamberV1 is IUniswapV3MintCallback {
         int24 currentTick = getTick();
 
         if (!s_liquidityTokenId) {
-            s_lowerTick = ((currentTick - 400) / 10) * 10;
-            s_upperTick = ((currentTick + 400) / 10) * 10;
+            s_lowerTick = ((currentTick - 700) / 10) * 10;
+            s_upperTick = ((currentTick + 700) / 10) * 10;
             (amount0, amount1) = calculateVirtPoolReserves(currentTick);
             usedLTV = s_targetLTV;
             s_liquidityTokenId = true;
@@ -408,6 +408,9 @@ contract ChamberV1 is IUniswapV3MintCallback {
         address assetIn,
         uint256 amountIn
     ) internal returns (uint256) {
+        console.log(assetIn);
+        console.log(amountIn);
+        console.log(TransferHelper.safeGetBalance(assetIn, address(this)));
         uint256 amountOut = i_uniswapSwapRouter.exactInput(
             ISwapRouter.ExactInputParams({
                 path: abi.encodePacked(assetIn, uint24(500), i_usdcAddress),
