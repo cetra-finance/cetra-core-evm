@@ -226,14 +226,17 @@ describe("Basic tests new", function () {
 
         console.log("TOTAL USD BALANCE");
         console.log(await chamber.currentUSDBalance());
+        console.log(await chamber.calculateCurrentPoolReserves());
 
         for (let i = 0; i < 40; i++) {
             await makeSwap(donorWallet, 100000, true);
             await makeSwap(donorWallet, 70000, false);
         }
+        mine(1000, { interval: 72 });
 
         console.log("TOTAL USD BALANCE");
         console.log(await chamber.currentUSDBalance());
+        console.log(await chamber.calculateCurrentPoolReserves());
         console.log("-----------------------------------------------------");
     });
 

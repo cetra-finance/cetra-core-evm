@@ -241,17 +241,13 @@ contract ChamberV1 is IUniswapV3MintCallback {
             uint256 feeWMATIC,
             uint256 feeWETH
         ) = _withdraw(
-                uint128((getPositionLiquidity() * _shares) / s_totalShares)
+                uint128((getPositionLiquidity() * _shares) / s_totalShares),
+                _shares
             );
 
-        uint256 amountWmatic = burnWMATIC +
-            ((TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) -
-                burnWMATIC) * _shares) /
-            s_totalShares;
-        uint256 amountWeth = burnWETH +
-            ((TransferHelper.safeGetBalance(i_wethAddress, address(this)) -
-                burnWETH) * _shares) /
-            s_totalShares;
+        uint256 amountWmatic = burnWMATIC + feeWMATIC;
+        uint256 amountWeth = burnWETH + feeWETH;
+        
         uint256 usdcBalanceBefore = TransferHelper.safeGetBalance(
             i_usdcAddress,
             address(this)
@@ -356,6 +352,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 getUsdcOraclePrice()) / _currentLTV),
             address(this)
         );
+
         if (wethOwnedByUser < wethDebtToCover + wethSwapped) {
             usdcSwapped += swapStableToExactAsset(
                 i_wethAddress,
@@ -391,7 +388,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 2,
                 address(this)
             );
-            wethRemainder = wethOwnedByUser - wethDebtToCover;
+            wethRemainder = wethOwnedByUser - wethDebtToCover - wethSwapped;
         }
 
         i_aaveV3Pool.withdraw(
@@ -408,9 +405,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
         address assetIn,
         uint256 amountIn
     ) internal returns (uint256) {
-        console.log(assetIn);
-        console.log(amountIn);
-        console.log(TransferHelper.safeGetBalance(assetIn, address(this)));
         uint256 amountOut = i_uniswapSwapRouter.exactInput(
             ISwapRouter.ExactInputParams({
                 path: abi.encodePacked(assetIn, uint24(500), i_usdcAddress),
@@ -468,7 +462,8 @@ contract ChamberV1 is IUniswapV3MintCallback {
     }
 
     function _withdraw(
-        uint128 liquidityToBurn
+        uint128 liquidityToBurn,
+        uint256 _shares
     ) internal returns (uint256, uint256, uint256, uint256) {
         uint256 preBalanceWMATIC = TransferHelper.safeGetBalance(
             i_wmaticAddress,
@@ -493,18 +488,18 @@ contract ChamberV1 is IUniswapV3MintCallback {
             type(uint128).max,
             type(uint128).max
         );
-        uint256 feeWMATIC = TransferHelper.safeGetBalance(
+        uint256 feeWMATIC = (TransferHelper.safeGetBalance(
             i_wmaticAddress,
             address(this)
         ) -
             preBalanceWMATIC -
-            burnWMATIC;
-        uint256 feeWETH = TransferHelper.safeGetBalance(
+            burnWMATIC) * _shares / s_totalShares;
+        uint256 feeWETH = (TransferHelper.safeGetBalance(
             i_wethAddress,
             address(this)
         ) -
             preBalanceWETH -
-            burnWETH;
+            burnWETH) * _shares / s_totalShares;
 
         return (burnWMATIC, burnWETH, feeWMATIC, feeWETH);
     }
