@@ -2,9 +2,6 @@
 pragma solidity >=0.8.0;
 pragma abicoder v2;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-
 import "./Uniswap/utils/LiquidityAmounts.sol";
 import "./Uniswap/interfaces/ISwapRouter.sol";
 import "./Uniswap/interfaces/IUniswapV3Pool.sol";
@@ -450,10 +447,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
         address assetOut,
         uint256 amountOut
     ) internal returns (uint256) {
-        IERC20(i_usdcAddress).approve(
-            address(i_uniswapSwapRouter),
-            type(uint256).max
-        );
         uint256 amountIn = i_uniswapSwapRouter.exactOutput(
             ISwapRouter.ExactOutputParams({
                 path: abi.encodePacked(assetOut, uint24(500), i_usdcAddress),
