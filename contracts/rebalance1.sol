@@ -220,9 +220,8 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 i_wethAddress,
                 address(this)
             );
-            (uint160 sqrtRatioX96, , , , , , ) = i_uniswapPool.slot0();
             uint128 liquidityMinted = LiquidityAmounts.getLiquidityForAmounts(
-                sqrtRatioX96,
+                getSqrtRatioX96(),
                 MathHelper.getSqrtRatioAtTick(s_lowerTick),
                 MathHelper.getSqrtRatioAtTick(s_upperTick),
                 wmaticRecieved,
@@ -561,9 +560,8 @@ contract ChamberV1 is IUniswapV3MintCallback {
         uint256 wethToWithdrawFromPool = (wmaticToWithdrawFromPool *
             wethPoolBalance) / wmaticPoolBalance;
 
-        (uint160 sqrtRatioX96, , , , , , ) = i_uniswapPool.slot0();
         uint128 liquidityToBurn = LiquidityAmounts.getLiquidityForAmounts(
-            sqrtRatioX96,
+            getSqrtRatioX96(),
             MathHelper.getSqrtRatioAtTick(s_lowerTick),
             MathHelper.getSqrtRatioAtTick(s_upperTick),
             wmaticToWithdrawFromPool,
@@ -700,12 +698,16 @@ contract ChamberV1 is IUniswapV3MintCallback {
             );
     }
 
+    function getSqrtRatioX96() public view returns (uint160) {
+        (uint160 sqrtRatioX96, , , , , , ) = i_uniswapPool.slot0();
+        return sqrtRatioX96;
+    }
+
     function calculateCurrentPoolReserves()
         public
         view
         returns (uint256 amount0Current, uint256 amount1Current)
     {
-        (uint160 sqrtRatioX96, , , , , , ) = i_uniswapPool.slot0();
         (
             uint128 liquidity,
             uint256 feeGrowthInside0Last,
@@ -717,7 +719,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
         // compute current holdings from liquidity
         (amount0Current, amount1Current) = LiquidityAmounts
             .getAmountsForLiquidity(
-                sqrtRatioX96,
+                getSqrtRatioX96(),
                 MathHelper.getSqrtRatioAtTick(s_lowerTick),
                 MathHelper.getSqrtRatioAtTick(s_upperTick),
                 liquidity

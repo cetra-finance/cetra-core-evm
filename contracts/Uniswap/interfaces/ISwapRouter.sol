@@ -72,4 +72,6 @@ interface ISwapRouter is IUniswapV3SwapCallback {
     function exactOutput(
         ExactOutputParams calldata params
     ) external payable returns (uint256 amountIn);
+
+    function factory() external view returns (address);
 }
