@@ -147,7 +147,10 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 usdAmount
             );
         }
+        _mint(usdAmount);
+    }
 
+    function _mint(uint256 usdAmount) internal {
         uint256 amount0;
         uint256 amount1;
         uint256 usedLTV;
@@ -236,8 +239,23 @@ contract ChamberV1 is IUniswapV3MintCallback {
     }
 
     function burn(uint256 _shares) external {
-        uint256 usdcToReturn = 0;
+        uint256 usdcBalanceBefore = TransferHelper.safeGetBalance(
+            i_usdcAddress,
+            address(this)
+        );
 
+        s_totalShares -= _shares;
+        s_userShares[msg.sender] -= _shares;
+
+        TransferHelper.safeTransfer(
+            i_usdcAddress,
+            msg.sender,
+            TransferHelper.safeGetBalance(i_usdcAddress, address(this)) -
+                usdcBalanceBefore
+        );
+    }
+
+    function _burn(uint256 _shares) internal {
         (
             uint256 burnWMATIC,
             uint256 burnWETH,
@@ -251,38 +269,18 @@ contract ChamberV1 is IUniswapV3MintCallback {
         uint256 amountWmatic = burnWMATIC + feeWMATIC;
         uint256 amountWeth = burnWETH + feeWETH;
 
-        uint256 usdcBalanceBefore = TransferHelper.safeGetBalance(
-            i_usdcAddress,
-            address(this)
-        );
         {
             (
                 uint256 wmaticRemainder,
                 uint256 wethRemainder
             ) = _repayAndWithdraw(_shares, amountWmatic, amountWeth);
             if (wmaticRemainder > 0) {
-                usdcToReturn += swapExactAssetToStable(
-                    i_wmaticAddress,
-                    wmaticRemainder
-                );
+                swapExactAssetToStable(i_wmaticAddress, wmaticRemainder);
             }
             if (wethRemainder > 0) {
-                usdcToReturn += swapExactAssetToStable(
-                    i_wethAddress,
-                    wethRemainder
-                );
+                swapExactAssetToStable(i_wethAddress, wethRemainder);
             }
         }
-
-        s_totalShares -= _shares;
-        s_userShares[msg.sender] -= _shares;
-
-        TransferHelper.safeTransfer(
-            i_usdcAddress,
-            msg.sender,
-            TransferHelper.safeGetBalance(i_usdcAddress, address(this)) -
-                usdcBalanceBefore
-        );
     }
 
     function _repayAndWithdraw(
@@ -527,91 +525,8 @@ contract ChamberV1 is IUniswapV3MintCallback {
     }
 
     function rebalance() public {
-        (
-            uint256 wmaticPoolBalance,
-            uint256 wethPoolBalance
-        ) = calculateCurrentPoolReserves();
-
-        uint256 wmaticPrice = getWmaticOraclePrice();
-        uint256 wethPrice = getWethOraclePrice();
-
-        uint256 wmaticToWithdrawFromPool = ((((getVWMATICTokenBalance() +
-            (wmaticPoolBalance * (PRECISION - s_targetLTV)) /
-            PRECISION) * wmaticPrice) /
-            PRECISION /
-            1e12 +
-            ((getVWETHTokenBalance() +
-                (wethPoolBalance * (PRECISION - s_targetLTV)) /
-                PRECISION) * wethPrice) /
-            PRECISION /
-            1e12 -
-            (getAUSDCTokenBalance() * getUsdcOraclePrice()) /
-            PRECISION) *
-            PRECISION *
-            1e12) /
-            ((wmaticPrice * wmaticPoolBalance) / wethPoolBalance + wethPrice);
-        uint256 wethToWithdrawFromPool = (wmaticToWithdrawFromPool *
-            wethPoolBalance) / wmaticPoolBalance;
-
-        uint128 liquidityToBurn = LiquidityAmounts.getLiquidityForAmounts(
-            getSqrtRatioX96(),
-            MathHelper.getSqrtRatioAtTick(s_lowerTick),
-            MathHelper.getSqrtRatioAtTick(s_upperTick),
-            wmaticToWithdrawFromPool,
-            wethToWithdrawFromPool
-        );
-
-        _withdraw(liquidityToBurn, 0);
-
-        uint256 wmaticToRepay = wmaticPoolBalance -
-            getVWMATICTokenBalance() -
-            wmaticToWithdrawFromPool;
-        uint256 wethToRepay = wethPoolBalance -
-            getVWETHTokenBalance() -
-            wethToWithdrawFromPool;
-        uint256 wmaticBalance = TransferHelper.safeGetBalance(
-            i_wmaticAddress,
-            address(this)
-        );
-        if (wmaticBalance < wmaticToRepay) {
-            swapAssetToExactAsset(
-                i_wethAddress,
-                i_wmaticAddress,
-                wmaticToRepay - wmaticBalance
-            );
-        }
-        i_aaveV3Pool.repay(i_wmaticAddress, wmaticToRepay, 2, address(this));
-        {
-            swapExactAssetToAsset(
-                i_wmaticAddress,
-                i_wethAddress,
-                TransferHelper.safeGetBalance(i_wmaticAddress, address(this))
-            );
-        }
-        uint256 wethBalance = TransferHelper.safeGetBalance(
-            i_wethAddress,
-            address(this)
-        );
-        if (wethBalance < wethToRepay) {
-            i_aaveV3Pool.withdraw(
-                i_usdcAddress,
-                (((1e6 * wmaticToRepay * wmaticPrice) / getUsdcOraclePrice()) /
-                    currentLTV()),
-                address(this)
-            );
-            swapStableToExactAsset(i_wethAddress, wethToRepay - wethBalance);
-        } else {
-            swapExactAssetToStable(
-                i_wethAddress,
-                TransferHelper.safeGetBalance(i_wethAddress, address(this))
-            );
-        }
-        i_aaveV3Pool.supply(
-            i_usdcAddress,
-            TransferHelper.safeGetBalance(i_usdcAddress, address(this)),
-            address(this),
-            0
-        );
+        _burn(s_totalShares);
+        _mint(TransferHelper.safeGetBalance(i_usdcAddress, address(this)));
     }
 
     // =================================
