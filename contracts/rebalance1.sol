@@ -243,6 +243,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
             i_usdcAddress,
             address(this)
         );
+        _burn(_shares);
 
         s_totalShares -= _shares;
         s_userShares[msg.sender] -= _shares;
