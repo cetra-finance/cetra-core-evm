@@ -39,6 +39,35 @@ describe("Basic tests new", function () {
 
     }
 
+    const makeSwapHelper = async(user, amount, way) => {
+        await usd.connect(user).approve(UniRouter.address, 100000000 * 1000000);
+        await wmatic.connect(user).approve(UniRouter.address,  ethers.utils.parseEther("100000000000000"));
+        await weth.connect(user).approve(UniRouter.address,  ethers.utils.parseEther("100000000000000"));
+
+        if (way) {
+            await UniRouter.connect(user).exactInput(
+                {
+                    path: ethers.utils.solidityPack(["address", "uint24", "address"], [networkConfig[network.config.chainId].usdcAddress, 500, networkConfig[network.config.chainId].wmaticAddress]),
+                    recipient: user.address,
+                    deadline: (await ethers.provider.getBlock("latest")).timestamp + 10000,
+                    amountIn: amount * 1e6,
+                    amountOutMinimum: 0
+                },
+            )
+        } else {
+            await UniRouter.connect(user).exactInput(
+                {
+                    path: ethers.utils.solidityPack(["address", "uint24", "address"], [networkConfig[network.config.chainId].wethAddress, 500, networkConfig[network.config.chainId].usdcAddress]),
+                    recipient: user.address,
+                    deadline: (await ethers.provider.getBlock("latest")).timestamp + 10000,
+                    amountIn: ethers.utils.parseEther(amount.toString()),
+                    amountOutMinimum: 0
+                },
+            )
+        }
+
+    }
+
     const setNewOraclePrice = async (asset, newPrice) => {
         await helpers.impersonateAccount("0xdc9a35b16db4e126cfedc41322b3a36454b1f772");
         oracleOwner = await ethers.getSigner(
@@ -266,6 +295,10 @@ describe("Basic tests new", function () {
             await makeSwap(donorWallet, 100000, true);
             await makeSwap(donorWallet, 70000, false);
         }
+        makeSwapHelper(donorWallet, 1568000, true);
+        console.log(await getPriceFromPair(weth, usd, 500, 1e18, 1e6));
+        console.log(await getPriceFromPair(wmatic, usd, 500, 1e18, 1e6));
+        console.log(await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18));
         console.log(await chamber.calculateCurrentPoolReserves())
         mine(1000, { interval: 72 });
 
@@ -273,6 +306,10 @@ describe("Basic tests new", function () {
         const WethUsdcPrices = await getPriceFromPair(weth, usd, 500, 1e18, 1e6);
         await setNewOraclePrice(weth, Math.round(WethUsdcPrices[1] * 1e8))
         await setNewOraclePrice(wmatic, Math.round(WethUsdcPrices[1] / WethWmaticPrices[1] * 1e8))
+
+        console.log(await chamber.getUsdcOraclePrice())
+        console.log(await chamber.getWmaticOraclePrice())
+        console.log(await chamber.getWethOraclePrice())
 
         console.log("TOTAL USD BALANCE");
         console.log(await chamber.currentUSDBalance());

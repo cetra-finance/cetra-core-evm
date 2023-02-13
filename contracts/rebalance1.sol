@@ -270,6 +270,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
         uint256 amountWmatic = burnWMATIC + feeWMATIC;
         uint256 amountWeth = burnWETH + feeWETH;
 
+
         {
             (
                 uint256 wmaticRemainder,
@@ -354,6 +355,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 getUsdcOraclePrice()) / _currentLTV),
             address(this)
         );
+
 
         if (wethOwnedByUser < wethDebtToCover + wethSwapped) {
             usdcSwapped += swapStableToExactAsset(
