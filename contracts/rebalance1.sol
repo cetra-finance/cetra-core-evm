@@ -267,8 +267,14 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 _shares
             );
 
-        uint256 amountWmatic = burnWMATIC + feeWMATIC;
-        uint256 amountWeth = burnWETH + feeWETH;
+        uint256 amountWmatic = burnWMATIC +
+            ((TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) -
+                burnWMATIC) * _shares) /
+            s_totalShares;
+        uint256 amountWeth = burnWETH +
+            ((TransferHelper.safeGetBalance(i_wethAddress, address(this)) -
+                burnWETH) * _shares) /
+            s_totalShares;
 
         {
             (
@@ -337,7 +343,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 //     wmaticBalanceBefore -
                 //     wmaticDebtToCover;
             }
-            wmaticRemainder = 0;
         } else {
             i_aaveV3Pool.repay(
                 i_wmaticAddress,
@@ -345,8 +350,14 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 2,
                 address(this)
             );
-            wmaticRemainder = wmaticOwnedByUser - wmaticDebtToCover;
         }
+        wmaticRemainder = TransferHelper.safeGetBalance(
+            i_wmaticAddress,
+            address(this)
+        ) > wmaticBalanceBefore
+            ? TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) -
+                wmaticBalanceBefore
+            : 0;
 
         i_aaveV3Pool.withdraw(
             i_usdcAddress,
@@ -383,7 +394,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 //     wmaticBalanceBefore -
                 //     wmaticDebtToCover;
             }
-            wethRemainder = 0;
         } else {
             i_aaveV3Pool.repay(
                 i_wethAddress,
@@ -391,8 +401,14 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 2,
                 address(this)
             );
-            wethRemainder = wethOwnedByUser - wethDebtToCover - wethSwapped;
         }
+        wethRemainder = TransferHelper.safeGetBalance(
+            i_wethAddress,
+            address(this)
+        ) > wethBalanceBefore
+            ? TransferHelper.safeGetBalance(i_wethAddress, address(this)) -
+                wethBalanceBefore
+            : 0;
 
         i_aaveV3Pool.withdraw(
             i_usdcAddress,
