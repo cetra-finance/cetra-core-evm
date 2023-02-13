@@ -270,7 +270,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
         uint256 amountWmatic = burnWMATIC + feeWMATIC;
         uint256 amountWeth = burnWETH + feeWETH;
 
-
         {
             (
                 uint256 wmaticRemainder,
@@ -356,18 +355,18 @@ contract ChamberV1 is IUniswapV3MintCallback {
             address(this)
         );
 
-
         if (wethOwnedByUser < wethDebtToCover + wethSwapped) {
             usdcSwapped += swapStableToExactAsset(
                 i_wethAddress,
                 wethDebtToCover + wethSwapped - wethOwnedByUser
             );
             if (
-                wethOwnedByUser +
-                    (TransferHelper.safeGetBalance(
+                (wethOwnedByUser +
+                    TransferHelper.safeGetBalance(
                         i_wethAddress,
                         address(this)
-                    ) - wethBalanceBefore) <
+                    )) -
+                    wethBalanceBefore <
                 wethDebtToCover
             ) {
                 revert ChamberV1__SwappedUsdcForWethStillCantRepay();
@@ -553,9 +552,13 @@ contract ChamberV1 is IUniswapV3MintCallback {
         ) = calculateCurrentFees();
         uint256 pureUSDCAmount = getAUSDCTokenBalance() +
             TransferHelper.safeGetBalance(i_usdcAddress, address(this));
-        uint256 poolTokensValue = ((wethPoolBalance + wethFeePending) *
+        uint256 poolTokensValue = ((wethPoolBalance +
+            wethFeePending +
+            TransferHelper.safeGetBalance(i_wethAddress, address(this))) *
             getWethOraclePrice() +
-            (wmaticPoolBalance + wmaticFeePending) *
+            (wmaticPoolBalance +
+                wmaticFeePending +
+                TransferHelper.safeGetBalance(i_wmaticAddress, address(this))) *
             getWmaticOraclePrice()) /
             getUsdcOraclePrice() /
             1e12;
