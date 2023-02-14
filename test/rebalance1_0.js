@@ -364,14 +364,14 @@ describe("Basic tests new", function () {
         console.log(await chamber.currentUSDBalance());
 
         for (let i = 0; i < 20; i++) {
-            await makeSwap(donorWallet, 100000, true);
-            await makeSwap(donorWallet, 70000, false);
+            await makeSwap(donorWallet, 10000, true);
+            await makeSwap(donorWallet, 7000, false);
         }
         for (let i = 0; i < 20; i++) {
-            await makeSwap(donorWallet, 100000, false);
-            await makeSwap(donorWallet, 70000, true);
+            await makeSwap(donorWallet, 10000, false);
+            await makeSwap(donorWallet, 7000, true);
         }
-        makeSwapHelper(donorWallet, 1568000, true);
+        makeSwapHelper(donorWallet, 156800, true);
         console.log(await getPriceFromPair(weth, usd, 500, 1e18, 1e6));
         console.log(await getPriceFromPair(wmatic, usd, 500, 1e18, 1e6));
         console.log(await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18));
