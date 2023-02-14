@@ -367,11 +367,11 @@ describe("Basic tests new", function () {
             await makeSwap(donorWallet, 100000, true);
             await makeSwap(
                 donorWallet,
-                await wmatic.balanceOf(donorWallet.address),
+                ethers.utils.formatEther(await wmatic.balanceOf(donorWallet.address)),
                 false
             );
         }
-        //makeSwapHelper(donorWallet, 156800, true);
+        makeSwapHelper(donorWallet, 150000, true);
         console.log(await getPriceFromPair(weth, usd, 500, 1e18, 1e6));
         console.log(await getPriceFromPair(wmatic, usd, 500, 1e18, 1e6));
         console.log(await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18));
