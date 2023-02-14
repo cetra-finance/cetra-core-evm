@@ -371,9 +371,9 @@ describe("Basic tests new", function () {
                 false
             );
         }
-        makeSwapHelper(donorWallet, 150000, true);
+        makeSwapHelper(donorWallet, 10000, true);
         console.log(await getPriceFromPair(weth, usd, 500, 1e18, 1e6));
-        console.log(await getPriceFromPair(wmatic, usd, 500, 1e18, 1e6));
+        console.log(await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18));
         console.log(await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18));
         console.log(await chamber.calculateCurrentPoolReserves());
         mine(1000, { interval: 72 });
