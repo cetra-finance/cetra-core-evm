@@ -46,6 +46,8 @@
         "dotenv": "^16.0.3",
         "hardhat-contract-sizer": "^2.7.0",
         "hardhat-deploy": "^0.11.22",
-        "hardhat-tracer": "^1.2.1"
+        "hardhat-tracer": "^1.2.1",
+        "jsbi": "3.2.5",
+        "@uniswap/v3-sdk": "3.9.0"
     }
 }

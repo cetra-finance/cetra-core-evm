@@ -4,40 +4,167 @@ const { ethers, upgrades } = require("hardhat");
 const { networkConfig } = require("../helper-hardhat-config");
 const helpers = require("@nomicfoundation/hardhat-network-helpers");
 const { mine } = require("@nomicfoundation/hardhat-network-helpers");
+const JSBI = require("jsbi");
 
 describe("Basic tests new", function () {
     let owner, _, user1, user2, donorWallet;
     let usd, weth;
+    let aaveOracle, UniRouter;
 
-    const makeSwap = async(user, amount, way) => {
-        UniRouter = await ethers.getContractAt("ISwapRouter", networkConfig[network.config.chainId].uniswapRouterAddress)
+    const makeSwap = async (user, amount, way) => {
         await usd.connect(user).approve(UniRouter.address, 100000000 * 1000000);
-        await wmatic.connect(user).approve(UniRouter.address,  ethers.utils.parseEther("100000000000000"));
+        await wmatic
+            .connect(user)
+            .approve(
+                UniRouter.address,
+                ethers.utils.parseEther("100000000000000")
+            );
 
         if (way) {
-            await UniRouter.connect(user).exactInput(
-                {
-                    path: ethers.utils.solidityPack(["address", "uint24", "address", "uint24", "address"], [networkConfig[network.config.chainId].usdcAddress, 500, networkConfig[network.config.chainId].wethAddress, 500, networkConfig[network.config.chainId].wmaticAddress]),
-                    recipient: user.address,
-                    deadline: (await ethers.provider.getBlock("latest")).timestamp + 10000,
-                    amountIn: amount * 1000000,
-                    amountOutMinimum: 0
-                },
-            )
+            await UniRouter.connect(user).exactInput({
+                path: ethers.utils.solidityPack(
+                    ["address", "uint24", "address", "uint24", "address"],
+                    [
+                        networkConfig[network.config.chainId].usdcAddress,
+                        500,
+                        networkConfig[network.config.chainId].wethAddress,
+                        500,
+                        networkConfig[network.config.chainId].wmaticAddress,
+                    ]
+                ),
+                recipient: user.address,
+                deadline:
+                    (await ethers.provider.getBlock("latest")).timestamp +
+                    10000,
+                amountIn: amount * 1000000,
+                amountOutMinimum: 0,
+            });
         } else {
-            await UniRouter.connect(user).exactInput(
-                {
-                    path: ethers.utils.solidityPack(["address", "uint24", "address", "uint24", "address"], [networkConfig[network.config.chainId].wmaticAddress, 500, networkConfig[network.config.chainId].wethAddress, 500, networkConfig[network.config.chainId].usdcAddress]),
-                    recipient: user.address,
-                    deadline: (await ethers.provider.getBlock("latest")).timestamp + 10000,
-                    amountIn: ethers.utils.parseEther(amount.toString()),
-                    amountOutMinimum: 0
-                },
-            )
+            await UniRouter.connect(user).exactInput({
+                path: ethers.utils.solidityPack(
+                    ["address", "uint24", "address", "uint24", "address"],
+                    [
+                        networkConfig[network.config.chainId].wmaticAddress,
+                        500,
+                        networkConfig[network.config.chainId].wethAddress,
+                        500,
+                        networkConfig[network.config.chainId].usdcAddress,
+                    ]
+                ),
+                recipient: user.address,
+                deadline:
+                    (await ethers.provider.getBlock("latest")).timestamp +
+                    10000,
+                amountIn: ethers.utils.parseEther(amount.toString()),
+                amountOutMinimum: 0,
+            });
         }
+    };
 
-    }
+    const makeSwapHelper = async (user, amount, way) => {
+        await usd.connect(user).approve(UniRouter.address, 100000000 * 1000000);
+        await wmatic
+            .connect(user)
+            .approve(
+                UniRouter.address,
+                ethers.utils.parseEther("100000000000000")
+            );
+        await weth
+            .connect(user)
+            .approve(
+                UniRouter.address,
+                ethers.utils.parseEther("100000000000000")
+            );
 
+        if (way) {
+            await UniRouter.connect(user).exactInput({
+                path: ethers.utils.solidityPack(
+                    ["address", "uint24", "address"],
+                    [
+                        networkConfig[network.config.chainId].usdcAddress,
+                        500,
+                        networkConfig[network.config.chainId].wmaticAddress,
+                    ]
+                ),
+                recipient: user.address,
+                deadline:
+                    (await ethers.provider.getBlock("latest")).timestamp +
+                    10000,
+                amountIn: amount * 1e6,
+                amountOutMinimum: 0,
+            });
+        } else {
+            await UniRouter.connect(user).exactInput({
+                path: ethers.utils.solidityPack(
+                    ["address", "uint24", "address"],
+                    [
+                        networkConfig[network.config.chainId].wethAddress,
+                        500,
+                        networkConfig[network.config.chainId].usdcAddress,
+                    ]
+                ),
+                recipient: user.address,
+                deadline:
+                    (await ethers.provider.getBlock("latest")).timestamp +
+                    10000,
+                amountIn: ethers.utils.parseEther(amount.toString()),
+                amountOutMinimum: 0,
+            });
+        }
+    };
+
+    const setNewOraclePrice = async (asset, newPrice) => {
+        await helpers.impersonateAccount(
+            "0xdc9a35b16db4e126cfedc41322b3a36454b1f772"
+        );
+        oracleOwner = await ethers.getSigner(
+            "0xdc9a35b16db4e126cfedc41322b3a36454b1f772"
+        );
+
+        await helpers.setBalance(
+            oracleOwner.address,
+            ethers.utils.parseEther("1000")
+        );
+
+        const OracleReplaceFactory = await ethers.getContractFactory(
+            "AaveOracleReplace"
+        );
+        const oracleReplace = await OracleReplaceFactory.deploy(newPrice);
+
+        await aaveOracle
+            .connect(oracleOwner)
+            .setAssetSources([asset.address], [oracleReplace.address]);
+    };
+
+    const getPriceFromPair = async (
+        token0,
+        token1,
+        poolFee,
+        decimals0,
+        decimals1
+    ) => {
+        const factoryAddress = await UniRouter.factory();
+        const factory = await ethers.getContractAt(
+            "IUniswapV3Factory",
+            factoryAddress
+        );
+        const poolAddress = await factory.getPool(
+            token0.address,
+            token1.address,
+            poolFee
+        );
+        const pool = await ethers.getContractAt("IUniswapV3Pool", poolAddress);
+        const sqrt = await pool.slot0();
+        const token0Price =
+            (sqrt[0] * sqrt[0] * decimals1) /
+            decimals0 /
+            JSBI.BigInt(2) ** JSBI.BigInt(192);
+        const token1Price =
+            ((JSBI.BigInt(2) ** JSBI.BigInt(192) / sqrt[0] / sqrt[0]) *
+                decimals0) /
+            decimals1;
+        return [token0Price, token1Price];
+    };
 
     before(async () => {
         console.log("DEPLOYING VAULT, FUNDING USER ACCOUNTS...");
@@ -58,6 +185,15 @@ describe("Basic tests new", function () {
             "IERC20",
             currNetworkConfig.wmaticAddress
         );
+        aaveOracle = await ethers.getContractAt(
+            "IAaveOracle",
+            currNetworkConfig.aaveOracleAddress
+        );
+        UniRouter = await ethers.getContractAt(
+            "ISwapRouter",
+            networkConfig[network.config.chainId].uniswapRouterAddress
+        );
+
         const chamberFactory = await ethers.getContractFactory("ChamberV1");
         chamber = await chamberFactory.deploy(
             currNetworkConfig.uniswapRouterAddress,
@@ -226,17 +362,48 @@ describe("Basic tests new", function () {
 
         console.log("TOTAL USD BALANCE");
         console.log(await chamber.currentUSDBalance());
-        console.log(await chamber.calculateCurrentPoolReserves());
 
-        for (let i = 0; i < 40; i++) {
+        for (let i = 0; i < 20; i++) {
             await makeSwap(donorWallet, 100000, true);
-            await makeSwap(donorWallet, 70000, false);
+            await makeSwap(
+                donorWallet,
+                ethers.utils.formatEther(await wmatic.balanceOf(donorWallet.address)),
+                false
+            );
         }
+        makeSwapHelper(donorWallet, 150000, true);
+        console.log(await getPriceFromPair(weth, usd, 500, 1e18, 1e6));
+        console.log(await getPriceFromPair(wmatic, usd, 500, 1e18, 1e6));
+        console.log(await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18));
+        console.log(await chamber.calculateCurrentPoolReserves());
         mine(1000, { interval: 72 });
+
+        const WethWmaticPrices = await getPriceFromPair(
+            weth,
+            wmatic,
+            500,
+            1e18,
+            1e18
+        );
+        const WethUsdcPrices = await getPriceFromPair(
+            weth,
+            usd,
+            500,
+            1e18,
+            1e6
+        );
+        await setNewOraclePrice(weth, Math.round(WethUsdcPrices[1] * 1e8));
+        await setNewOraclePrice(
+            wmatic,
+            Math.round((WethUsdcPrices[1] / WethWmaticPrices[1]) * 1e8)
+        );
+
+        console.log(await chamber.getUsdcOraclePrice());
+        console.log(await chamber.getWmaticOraclePrice());
+        console.log(await chamber.getWethOraclePrice());
 
         console.log("TOTAL USD BALANCE");
         console.log(await chamber.currentUSDBalance());
-        console.log(await chamber.calculateCurrentPoolReserves());
         console.log("-----------------------------------------------------");
     });
 
