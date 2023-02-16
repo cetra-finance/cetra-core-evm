@@ -477,7 +477,7 @@ describe("Basic tests new", function () {
                 );
             }
 
-            await makeSwapHelper3(donorWallet, 50000, true);
+            await makeSwapHelper3(donorWallet, 200000, true);
 
             WethWmaticPrices = await getPriceFromPair(
                 weth, wmatic, 500, 1e18, 1e18

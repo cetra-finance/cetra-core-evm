@@ -6,7 +6,7 @@ const helpers = require("@nomicfoundation/hardhat-network-helpers");
 const { mine } = require("@nomicfoundation/hardhat-network-helpers");
 const JSBI = require("jsbi");
 
-describe("Basic tests new", function () {
+describe("maticToEthPriceRise", function () {
     let owner, _, user1, user2, donorWallet;
     let usd, weth;
     let aaveOracle, UniRouter;
@@ -117,110 +117,6 @@ describe("Basic tests new", function () {
         }
     };
 
-    const makeSwapHelper2 = async (user, amount, way) => {
-        await usd.connect(user).approve(UniRouter.address, 100000000 * 1000000);
-        await wmatic
-            .connect(user)
-            .approve(
-                UniRouter.address,
-                ethers.utils.parseEther("100000000000000")
-            );
-        await weth
-            .connect(user)
-            .approve(
-                UniRouter.address,
-                ethers.utils.parseEther("100000000000000")
-            );
-
-        if (way) {
-            await UniRouter.connect(user).exactInput({
-                path: ethers.utils.solidityPack(
-                    ["address", "uint24", "address"],
-                    [
-                        networkConfig[network.config.chainId].usdcAddress,
-                        500,
-                        networkConfig[network.config.chainId].wethAddress,
-                    ]
-                ),
-                recipient: user.address,
-                deadline:
-                    (await ethers.provider.getBlock("latest")).timestamp +
-                    10000,
-                amountIn: amount * 1e6,
-                amountOutMinimum: 0,
-            });
-        } else {
-            await UniRouter.connect(user).exactInput({
-                path: ethers.utils.solidityPack(
-                    ["address", "uint24", "address"],
-                    [
-                        networkConfig[network.config.chainId].wethAddress,
-                        500,
-                        networkConfig[network.config.chainId].usdcAddress,
-                    ]
-                ),
-                recipient: user.address,
-                deadline:
-                    (await ethers.provider.getBlock("latest")).timestamp +
-                    10000,
-                amountIn: ethers.utils.parseEther(amount.toString()),
-                amountOutMinimum: 0,
-            });
-        }
-    };
-
-    const makeSwapHelper3 = async (user, amount, way) => {
-        await usd.connect(user).approve(UniRouter.address, 100000000 * 1000000);
-        await wmatic
-            .connect(user)
-            .approve(
-                UniRouter.address,
-                ethers.utils.parseEther("100000000000000")
-            );
-        await weth
-            .connect(user)
-            .approve(
-                UniRouter.address,
-                ethers.utils.parseEther("100000000000000")
-            );
-
-        if (way) {
-            await UniRouter.connect(user).exactInput({
-                path: ethers.utils.solidityPack(
-                    ["address", "uint24", "address"],
-                    [
-                        networkConfig[network.config.chainId].wmaticAddress,
-                        500,
-                        networkConfig[network.config.chainId].wethAddress,
-                    ]
-                ),
-                recipient: user.address,
-                deadline:
-                    (await ethers.provider.getBlock("latest")).timestamp +
-                    10000,
-                amountIn: ethers.utils.parseEther(amount.toString()),
-                amountOutMinimum: 0,
-            });
-        } else {
-            await UniRouter.connect(user).exactInput({
-                path: ethers.utils.solidityPack(
-                    ["address", "uint24", "address"],
-                    [
-                        networkConfig[network.config.chainId].wethAddress,
-                        500,
-                        networkConfig[network.config.chainId].wmaticAddress,
-                    ]
-                ),
-                recipient: user.address,
-                deadline:
-                    (await ethers.provider.getBlock("latest")).timestamp +
-                    10000,
-                amountIn: ethers.utils.parseEther(amount.toString()),
-                amountOutMinimum: 0,
-            });
-        }
-    };
-
     const setNewOraclePrice = async (asset, newPrice) => {
         await helpers.impersonateAccount(
             "0xdc9a35b16db4e126cfedc41322b3a36454b1f772"
@@ -279,42 +175,64 @@ describe("Basic tests new", function () {
     // =================================
 
     const makeDeposit = async (user, amount) => {
-        const contractBalanceBefore = await chamber.currentUSDBalance()
+        const contractBalanceBefore = await chamber.currentUSDBalance();
         // const userInnerBalanceBefore = await chamber.sharesWorth(await chamber.s_userShares(user.address));
         await chamber.connect(user).mint(amount);
-        expect(await chamber.currentUSDBalance()).to.be.closeTo(contractBalanceBefore.add(amount), 10);
+        expect(await chamber.currentUSDBalance()).to.be.closeTo(
+            contractBalanceBefore.add(amount),
+            10
+        );
         // expect(await chamber.sharesWorth(await chamber.s_userShares(user.address))).to.be.closeTo(userInnerBalanceBefore.add(amount), 10);
-    }
+    };
 
     const makeBurn = async (user, amount) => {
         const userUsdBalanceBefore = await usd.balanceOf(user.address);
         await chamber.connect(user).burn(amount);
         console.log(
             "user balance diff",
-            (await usd.balanceOf(user.address)).sub(userUsdBalanceBefore).toString()
+            (await usd.balanceOf(user.address))
+                .sub(userUsdBalanceBefore)
+                .toString()
         );
-    }
+    };
 
     const makeAllChecks = async () => {
         console.log("TOKENS LEFT IN CONTRACT");
         console.log("usd:", (await usd.balanceOf(chamber.address)).toString());
-        console.log("weth:", (await weth.balanceOf(chamber.address)).toString());
-        console.log("matic:", (await ethers.provider.getBalance(chamber.address)).toString());
-        console.log("wmatic:", (await wmatic.balanceOf(chamber.address)).toString());
+        console.log(
+            "weth:",
+            (await weth.balanceOf(chamber.address)).toString()
+        );
+        console.log(
+            "matic:",
+            (await ethers.provider.getBalance(chamber.address)).toString()
+        );
+        console.log(
+            "wmatic:",
+            (await wmatic.balanceOf(chamber.address)).toString()
+        );
 
         console.log("TOKENS IN UNI POSITION:");
         console.log((await chamber.calculateCurrentPoolReserves()).toString());
         console.log("TOKENS IN AAVE POSITION");
-        console.log("COLLATERAL TOKENS ($):", (await chamber.getAUSDCTokenBalance()).toString());
+        console.log(
+            "COLLATERAL TOKENS ($):",
+            (await chamber.getAUSDCTokenBalance()).toString()
+        );
         console.log("DEBT TOKENS:");
         console.log(
-            "DEPT IN MATIC:", (await chamber.getVWMATICTokenBalance()).toString(),
-            "\nDEPT IN WETH:", (await chamber.getVWETHTokenBalance()).toString()
+            "DEPT IN MATIC:",
+            (await chamber.getVWMATICTokenBalance()).toString(),
+            "\nDEPT IN WETH:",
+            (await chamber.getVWETHTokenBalance()).toString()
         );
         console.log("LTV IS:", (await chamber.currentLTV()).toString());
 
-        console.log("TOTAL USD BALANCE:", (await chamber.currentUSDBalance()).toString());
-    }
+        console.log(
+            "TOTAL USD BALANCE:",
+            (await chamber.currentUSDBalance()).toString()
+        );
+    };
 
     // =================================
     // Main tests
@@ -449,13 +367,13 @@ describe("Basic tests new", function () {
         it("user1 mints 1500$", async function () {
             await makeDeposit(user1, 1500 * 1e6);
         });
-    })
+    });
 
     describe("checks 1", async function () {
         it("makes all checks", async function () {
             await makeAllChecks();
-        })
-    })
+        });
+    });
 
     describe("should make swaps in uni pools, so our position collect some fees", async function () {
         let WethWmaticPrices, WethUsdcPrices;
@@ -466,36 +384,42 @@ describe("Basic tests new", function () {
             console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
             console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
 
-            await wmatic.connect(donorWallet).deposit({ value: ethers.utils.parseEther("10000000") });
+            await wmatic.connect(donorWallet).deposit({ value: ethers.utils.parseEther("1000000") });
 
-            for (let i = 0; i < 10; i++) {
-                await makeSwap(donorWallet, 70000, true);
-                await makeSwap(
-                    donorWallet,
-                    50000,
-                    false
-                );
+            for (let i = 0; i < 20; i++) {
+                await makeSwap(donorWallet, 100000, true);
+                await makeSwap(donorWallet, 70000, false);
             }
 
-            await makeSwapHelper3(donorWallet, 200000, true);
-
             WethWmaticPrices = await getPriceFromPair(
-                weth, wmatic, 500, 1e18, 1e18
+                weth,
+                wmatic,
+                500,
+                1e18,
+                1e18
             );
-            WethUsdcPrices = await getPriceFromPair(
-                weth, usd, 500, 1e18, 1e6
-            );
-            const wmaticTargetPrice = Math.round((WethUsdcPrices[1] / WethWmaticPrices[1]) * 1e8) * 1e10
+            WethUsdcPrices = await getPriceFromPair(weth, usd, 500, 1e18, 1e6);
+            const wmaticTargetPrice =
+                Math.round((WethUsdcPrices[1] / WethWmaticPrices[1]) * 1e8) *
+                1e10;
 
-            if (((await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0]) * 1e18 < BigNumber.from(wmaticTargetPrice.toString())) {
+            if (
+                (await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0] *
+                    1e18 <
+                BigNumber.from(wmaticTargetPrice.toString())
+            ) {
                 while (
-                    ((await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0]) * 1e18 < BigNumber.from(wmaticTargetPrice.toString())
+                    (await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0] *
+                        1e18 <
+                    BigNumber.from(wmaticTargetPrice.toString())
                 ) {
                     makeSwapHelper(donorWallet, 5000, true);
                 }
             } else {
                 while (
-                    (((await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0]) * 1e18 > BigNumber.from(wmaticTargetPrice.toString()))
+                    (await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0] *
+                        1e18 >
+                    BigNumber.from(wmaticTargetPrice.toString())
                 ) {
                     makeSwapHelper(donorWallet, 4000, false);
                 }
@@ -514,35 +438,35 @@ describe("Basic tests new", function () {
                 wmatic,
                 Math.round((WethUsdcPrices[1] / WethWmaticPrices[1]) * 1e8)
             );
-        })
-    })
+        });
+    });
 
     describe("checks 2", async function () {
         it("makes all checks", async function () {
             await makeAllChecks();
-        })
-    })
+        });
+    });
 
     describe("users burn all their positions", async function () {
         it("owner burns his position", async function () {
             const toBurn = await chamber.s_userShares(owner.address);
             await makeBurn(owner, toBurn);
-        })
+        });
 
         it("user1 burns his position", async function () {
             const toBurn = await chamber.s_userShares(user1.address);
             await makeBurn(user1, toBurn);
-        })
+        });
 
         it("user2 burns his position", async function () {
             const toBurn = await chamber.s_userShares(user2.address);
             await makeBurn(user2, toBurn);
-        })
-    })
+        });
+    });
 
     describe("checks 3", async function () {
         it("makes all checks", async function () {
             await makeAllChecks();
-        })
-    })
+        });
+    });
 });

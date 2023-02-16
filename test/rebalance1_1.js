@@ -379,16 +379,14 @@ describe("maticToEthPriceConst", function () {
         let WethWmaticPrices, WethUsdcPrices;
 
         it("makes all swaps", async function () {
-<<<<<<< HEAD:test/rebalance1_1.js
 
             console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
             console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
             console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
-=======
+            
             await wmatic
                 .connect(donorWallet)
                 .deposit({ value: ethers.utils.parseEther("1000000") });
->>>>>>> 6845ee12ed0f11c939665b139f81045a8f1ae62f:test/maticToEthPriceConst.js
 
             for (let i = 0; i < 20; i++) {
                 let balanceBefore = await wmatic.balanceOf(donorWallet.address);
@@ -438,17 +436,12 @@ describe("maticToEthPriceConst", function () {
                 }
             }
 
-<<<<<<< HEAD:test/rebalance1_1.js
             console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
             console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
             console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
 
             mine(1000, { interval: 72 })
         })
-=======
-            mine(1000, { interval: 72 });
-        });
->>>>>>> 6845ee12ed0f11c939665b139f81045a8f1ae62f:test/maticToEthPriceConst.js
 
         it("should set all oracles", async function () {
             await setNewOraclePrice(weth, Math.round(WethUsdcPrices[1] * 1e8));
