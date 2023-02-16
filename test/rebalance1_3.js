@@ -358,6 +358,10 @@ describe("Basic tests new", function () {
 
         it("makes all swaps", async function () {
 
+            console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
+            console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
+            console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
+
             await wmatic.connect(donorWallet).deposit({ value: ethers.utils.parseEther("1000000") });
             
             for (let i = 0; i < 20; i++) {
@@ -377,7 +381,6 @@ describe("Basic tests new", function () {
                 weth, usd, 500, 1e18, 1e6
             );
             const wmaticTargetPrice = Math.round((WethUsdcPrices[1] / WethWmaticPrices[1]) * 1e8) * 1e10
-            console.log("wmaticTargetPrice", wmaticTargetPrice)
 
             if (((await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0]) * 1e18 < BigNumber.from(wmaticTargetPrice.toString())) {
                 while (
@@ -392,6 +395,10 @@ describe("Basic tests new", function () {
                     makeSwapHelper(donorWallet, 4000, false);
                 }
             }
+
+            console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
+            console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
+            console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
 
             mine(1000, { interval: 72 })
         })

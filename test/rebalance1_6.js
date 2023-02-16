@@ -117,6 +117,110 @@ describe("Basic tests new", function () {
         }
     };
 
+    const makeSwapHelper2 = async (user, amount, way) => {
+        await usd.connect(user).approve(UniRouter.address, 100000000 * 1000000);
+        await wmatic
+            .connect(user)
+            .approve(
+                UniRouter.address,
+                ethers.utils.parseEther("100000000000000")
+            );
+        await weth
+            .connect(user)
+            .approve(
+                UniRouter.address,
+                ethers.utils.parseEther("100000000000000")
+            );
+
+        if (way) {
+            await UniRouter.connect(user).exactInput({
+                path: ethers.utils.solidityPack(
+                    ["address", "uint24", "address"],
+                    [
+                        networkConfig[network.config.chainId].usdcAddress,
+                        500,
+                        networkConfig[network.config.chainId].wethAddress,
+                    ]
+                ),
+                recipient: user.address,
+                deadline:
+                    (await ethers.provider.getBlock("latest")).timestamp +
+                    10000,
+                amountIn: amount * 1e6,
+                amountOutMinimum: 0,
+            });
+        } else {
+            await UniRouter.connect(user).exactInput({
+                path: ethers.utils.solidityPack(
+                    ["address", "uint24", "address"],
+                    [
+                        networkConfig[network.config.chainId].wethAddress,
+                        500,
+                        networkConfig[network.config.chainId].usdcAddress,
+                    ]
+                ),
+                recipient: user.address,
+                deadline:
+                    (await ethers.provider.getBlock("latest")).timestamp +
+                    10000,
+                amountIn: ethers.utils.parseEther(amount.toString()),
+                amountOutMinimum: 0,
+            });
+        }
+    };
+
+    const makeSwapHelper3 = async (user, amount, way) => {
+        await usd.connect(user).approve(UniRouter.address, 100000000 * 1000000);
+        await wmatic
+            .connect(user)
+            .approve(
+                UniRouter.address,
+                ethers.utils.parseEther("100000000000000")
+            );
+        await weth
+            .connect(user)
+            .approve(
+                UniRouter.address,
+                ethers.utils.parseEther("100000000000000")
+            );
+
+        if (way) {
+            await UniRouter.connect(user).exactInput({
+                path: ethers.utils.solidityPack(
+                    ["address", "uint24", "address"],
+                    [
+                        networkConfig[network.config.chainId].wmaticAddress,
+                        500,
+                        networkConfig[network.config.chainId].wethAddress,
+                    ]
+                ),
+                recipient: user.address,
+                deadline:
+                    (await ethers.provider.getBlock("latest")).timestamp +
+                    10000,
+                amountIn: ethers.utils.parseEther(amount.toString()),
+                amountOutMinimum: 0,
+            });
+        } else {
+            await UniRouter.connect(user).exactInput({
+                path: ethers.utils.solidityPack(
+                    ["address", "uint24", "address"],
+                    [
+                        networkConfig[network.config.chainId].wethAddress,
+                        500,
+                        networkConfig[network.config.chainId].wmaticAddress,
+                    ]
+                ),
+                recipient: user.address,
+                deadline:
+                    (await ethers.provider.getBlock("latest")).timestamp +
+                    10000,
+                amountIn: ethers.utils.parseEther(amount.toString()),
+                amountOutMinimum: 0,
+            });
+        }
+    };
+
     const setNewOraclePrice = async (asset, newPrice) => {
         await helpers.impersonateAccount(
             "0xdc9a35b16db4e126cfedc41322b3a36454b1f772"
@@ -362,14 +466,18 @@ describe("Basic tests new", function () {
             console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
             console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
 
-            for (let i = 0; i < 20; i++) {
-                await makeSwap(donorWallet, 100000, true);
+            await wmatic.connect(donorWallet).deposit({ value: ethers.utils.parseEther("10000000") });
+
+            for (let i = 0; i < 10; i++) {
+                await makeSwap(donorWallet, 70000, true);
                 await makeSwap(
                     donorWallet,
-                    70000,
+                    50000,
                     false
                 );
             }
+
+            await makeSwapHelper3(donorWallet, 50000, true);
 
             WethWmaticPrices = await getPriceFromPair(
                 weth, wmatic, 500, 1e18, 1e18

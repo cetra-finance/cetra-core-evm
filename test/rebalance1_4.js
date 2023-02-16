@@ -362,8 +362,10 @@ describe("Basic tests new", function () {
             console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
             console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
 
+            await wmatic.connect(donorWallet).deposit({ value: ethers.utils.parseEther("10000000") });
+            
             for (let i = 0; i < 20; i++) {
-                await makeSwap(donorWallet, 100000, true);
+                await makeSwap(donorWallet, 70000, true);
                 await makeSwap(
                     donorWallet,
                     70000,
