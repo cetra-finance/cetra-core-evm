@@ -20,6 +20,8 @@ import "hardhat/console.sol";
 
 /*Errors */
 error ChamberV1__AaveDepositError();
+error ChamberV1__UserRepaidMoreEthThanOwned();
+error ChamberV1__UserRepaidMoreMaticThanOwned();
 error ChamberV1__SwappedWethForWmaticStillCantRepay();
 error ChamberV1__SwappedWmaticForWethStillCantRepay();
 error ChamberV1__SwappedUsdcForWethStillCantRepay();
@@ -257,15 +259,10 @@ contract ChamberV1 is IUniswapV3MintCallback {
     }
 
     function _burn(uint256 _shares) internal {
-        (
-            uint256 burnWMATIC,
-            uint256 burnWETH,
-            uint256 feeWMATIC,
-            uint256 feeWETH
-        ) = _withdraw(
-                uint128((getPositionLiquidity() * _shares) / s_totalShares),
-                _shares
-            );
+        (uint256 burnWMATIC, uint256 burnWETH, , ) = _withdraw(
+            uint128((getPositionLiquidity() * _shares) / s_totalShares),
+            _shares
+        );
 
         uint256 amountWmatic = burnWMATIC +
             ((TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) -
@@ -330,34 +327,25 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 wmaticDebtToCover
             ) {
                 revert ChamberV1__SwappedWethForWmaticStillCantRepay();
-            } else {
-                i_aaveV3Pool.repay(
-                    i_wmaticAddress,
-                    wmaticDebtToCover,
-                    2,
-                    address(this)
-                );
-                // no dust should be remaining
-                // uint256 wmaticUserRemainder = wmaticOwnedByUser +
-                //     IERC20(i_wmaticAddress).balanceOf(address(this)) -
-                //     wmaticBalanceBefore -
-                //     wmaticDebtToCover;
             }
-        } else {
-            i_aaveV3Pool.repay(
-                i_wmaticAddress,
-                wmaticDebtToCover,
-                2,
-                address(this)
-            );
         }
-        wmaticRemainder = TransferHelper.safeGetBalance(
+        i_aaveV3Pool.repay(
             i_wmaticAddress,
+            wmaticDebtToCover,
+            2,
             address(this)
-        ) > wmaticBalanceBefore
-            ? TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) -
-                wmaticBalanceBefore
-            : 0;
+        );
+        if (
+            TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) >=
+            wmaticBalanceBefore - wmaticOwnedByUser
+        ) {
+            wmaticRemainder =
+                TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) +
+                wmaticOwnedByUser -
+                wmaticBalanceBefore;
+        } else {
+            revert ChamberV1__UserRepaidMoreMaticThanOwned();
+        }
 
         i_aaveV3Pool.withdraw(
             i_usdcAddress,
@@ -381,34 +369,21 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 wethDebtToCover
             ) {
                 revert ChamberV1__SwappedUsdcForWethStillCantRepay();
-            } else {
-                i_aaveV3Pool.repay(
-                    i_wethAddress,
-                    wethDebtToCover,
-                    2,
-                    address(this)
-                );
-                // no dust should be remaining
-                // uint256 wmaticUserRemainder = wmaticOwnedByUser +
-                //     IERC20(i_wmaticAddress).balanceOf(address(this)) -
-                //     wmaticBalanceBefore -
-                //     wmaticDebtToCover;
             }
-        } else {
-            i_aaveV3Pool.repay(
-                i_wethAddress,
-                wethDebtToCover,
-                2,
-                address(this)
-            );
         }
-        wethRemainder = TransferHelper.safeGetBalance(
-            i_wethAddress,
-            address(this)
-        ) > wethBalanceBefore
-            ? TransferHelper.safeGetBalance(i_wethAddress, address(this)) -
-                wethBalanceBefore
-            : 0;
+        i_aaveV3Pool.repay(i_wethAddress, wethDebtToCover, 2, address(this));
+
+        if (
+            TransferHelper.safeGetBalance(i_wethAddress, address(this)) >=
+            wethBalanceBefore - wethOwnedByUser
+        ) {
+            wethRemainder =
+                TransferHelper.safeGetBalance(i_wethAddress, address(this)) +
+                wethOwnedByUser -
+                wethBalanceBefore;
+        } else {
+            revert ChamberV1__UserRepaidMoreEthThanOwned();
+        }
 
         i_aaveV3Pool.withdraw(
             i_usdcAddress,
