@@ -359,7 +359,7 @@ describe("Basic tests new", function () {
         it("makes all swaps", async function () {
 
             await wmatic.connect(donorWallet).deposit({ value: ethers.utils.parseEther("1000000") });
-            
+
             for (let i = 0; i < 20; i++) {
                 let balanceBefore = await wmatic.balanceOf(donorWallet.address);
                 await makeSwap(donorWallet, 100000, true);
@@ -377,7 +377,6 @@ describe("Basic tests new", function () {
                 weth, usd, 500, 1e18, 1e6
             );
             const wmaticTargetPrice = Math.round((WethUsdcPrices[1] / WethWmaticPrices[1]) * 1e8) * 1e10
-            console.log("wmaticTargetPrice", wmaticTargetPrice)
 
             if (((await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0]) * 1e18 < BigNumber.from(wmaticTargetPrice.toString())) {
                 while (
