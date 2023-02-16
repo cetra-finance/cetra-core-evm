@@ -6,7 +6,7 @@ const helpers = require("@nomicfoundation/hardhat-network-helpers");
 const { mine } = require("@nomicfoundation/hardhat-network-helpers");
 const JSBI = require("jsbi");
 
-describe("Basic tests new", function () {
+describe("maticToEthPriceFall", function () {
     let owner, _, user1, user2, donorWallet;
     let usd, weth;
     let aaveOracle, UniRouter;
@@ -363,13 +363,13 @@ describe("Basic tests new", function () {
             console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
 
             await wmatic.connect(donorWallet).deposit({ value: ethers.utils.parseEther("1000000") });
-
+            
             for (let i = 0; i < 20; i++) {
                 let balanceBefore = await wmatic.balanceOf(donorWallet.address);
                 await makeSwap(donorWallet, 100000, true);
                 await makeSwap(
                     donorWallet,
-                    ethers.utils.formatEther((await wmatic.balanceOf(donorWallet.address)).sub(balanceBefore).add(ethers.utils.parseEther("1000"))),
+                    ethers.utils.formatEther((await wmatic.balanceOf(donorWallet.address)).sub(balanceBefore)),
                     false
                 );
             }
