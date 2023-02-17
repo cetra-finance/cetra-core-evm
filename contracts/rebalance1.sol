@@ -264,7 +264,13 @@ contract ChamberV1 is
         }
 
         if (wethToBorrow > 0) {
-            i_aaveV3Pool.borrow(i_wethAddress, wethToBorrow, 2, 0, address(this));
+            i_aaveV3Pool.borrow(
+                i_wethAddress,
+                wethToBorrow,
+                2,
+                0,
+                address(this)
+            );
         }
 
         {
@@ -323,6 +329,7 @@ contract ChamberV1 is
     }
 
     function rebalance() private {
+        s_liquidityTokenId = false;
         _burn(s_totalShares);
         _mint(TransferHelper.safeGetBalance(i_usdcAddress, address(this)));
     }
