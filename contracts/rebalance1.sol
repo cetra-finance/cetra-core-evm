@@ -160,28 +160,7 @@ contract ChamberV1 is
         );
     }
 
-    function rebalance() private lock {
-        _burn(s_totalShares);
-        _mint(TransferHelper.safeGetBalance(i_usdcAddress, address(this)));
-    }
-
-    function checkUpkeep(
-        bytes memory /* checkData */
-    )
-        public
-        view
-        override
-        returns (bool upkeepNeeded, bytes memory /* performData */)
-    {
-        uint256 _currentLTV = currentLTV();
-        bool ltvOutOfBounds = _currentLTV >= s_maxLTV ||
-            _currentLTV <= s_minLTV;
-        bool fundsDeposited = s_totalShares != 0;
-        upkeepNeeded = (ltvOutOfBounds && fundsDeposited);
-        return (upkeepNeeded, "0x0");
-    }
-
-    function performUpkeep(bytes calldata /* performData */) external override {
+    function performUpkeep(bytes calldata /* performData */) external override lock {
         (bool upkeepNeeded, ) = checkUpkeep("");
         // require(upkeepNeeded, "Upkeep not needed");
         if (!upkeepNeeded) {
@@ -309,6 +288,11 @@ contract ChamberV1 is
                 swapExactAssetToStable(i_wethAddress, wethRemainder);
             }
         }
+    }
+
+    function rebalance() private {
+        _burn(s_totalShares);
+        _mint(TransferHelper.safeGetBalance(i_usdcAddress, address(this)));
     }
 
     // =================================
@@ -548,6 +532,22 @@ contract ChamberV1 is
     // =================================
     // View funcitons
     // =================================
+
+    function checkUpkeep(
+        bytes memory /* checkData */
+    )
+        public
+        view
+        override
+        returns (bool upkeepNeeded, bytes memory /* performData */)
+    {
+        uint256 _currentLTV = currentLTV();
+        bool ltvOutOfBounds = _currentLTV >= s_maxLTV ||
+            _currentLTV <= s_minLTV;
+        bool fundsDeposited = s_totalShares != 0;
+        upkeepNeeded = (ltvOutOfBounds && fundsDeposited);
+        return (upkeepNeeded, "0x0");
+    }
 
     function currentUSDBalance() public view returns (uint256) {
         (
