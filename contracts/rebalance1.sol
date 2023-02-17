@@ -568,16 +568,6 @@ contract ChamberV1 is
         return pureUSDCAmount + poolTokensValue - debtTokensValue;
     }
 
-    function getTotalShares() external view returns (uint256) {
-        return s_totalShares;
-    }
-
-    function getUserShares(
-        address userAddress
-    ) external view returns (uint256) {
-        return s_userShares[userAddress];
-    }
-
     function currentLTV() public view returns (uint256) {
         // return currentETHBorrowed * getWethOraclePrice() / currentUSDInCollateral/getUsdOraclePrice()
         (
