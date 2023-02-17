@@ -6,7 +6,7 @@ const helpers = require("@nomicfoundation/hardhat-network-helpers");
 const { mine } = require("@nomicfoundation/hardhat-network-helpers");
 const JSBI = require("jsbi");
 
-describe("Basic tests new", function () {
+describe("Basic tests new1", function () {
     let owner, _, user1, user2, donorWallet;
     let usd, weth;
     let aaveOracle, UniRouter;
@@ -208,7 +208,8 @@ describe("Basic tests new", function () {
         await chamber.setLTV(
             currNetworkConfig.targetLTV,
             currNetworkConfig.minLTV,
-            currNetworkConfig.maxLTV
+            currNetworkConfig.maxLTV,
+            currNetworkConfig.hedgeDev
         );
 
         await chamber.deployed();
@@ -367,7 +368,9 @@ describe("Basic tests new", function () {
             await makeSwap(donorWallet, 100000, true);
             await makeSwap(
                 donorWallet,
-                ethers.utils.formatEther(await wmatic.balanceOf(donorWallet.address)),
+                ethers.utils.formatEther(
+                    await wmatic.balanceOf(donorWallet.address)
+                ),
                 false
             );
         }

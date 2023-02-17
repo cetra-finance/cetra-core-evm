@@ -175,42 +175,64 @@ describe("maticToEthPriceFall", function () {
     // =================================
 
     const makeDeposit = async (user, amount) => {
-        const contractBalanceBefore = await chamber.currentUSDBalance()
+        const contractBalanceBefore = await chamber.currentUSDBalance();
         // const userInnerBalanceBefore = await chamber.sharesWorth(await chamber.s_userShares(user.address));
         await chamber.connect(user).mint(amount);
-        expect(await chamber.currentUSDBalance()).to.be.closeTo(contractBalanceBefore.add(amount), 10);
+        expect(await chamber.currentUSDBalance()).to.be.closeTo(
+            contractBalanceBefore.add(amount),
+            10
+        );
         // expect(await chamber.sharesWorth(await chamber.s_userShares(user.address))).to.be.closeTo(userInnerBalanceBefore.add(amount), 10);
-    }
+    };
 
     const makeBurn = async (user, amount) => {
         const userUsdBalanceBefore = await usd.balanceOf(user.address);
         await chamber.connect(user).burn(amount);
         console.log(
             "user balance diff",
-            (await usd.balanceOf(user.address)).sub(userUsdBalanceBefore).toString()
+            (await usd.balanceOf(user.address))
+                .sub(userUsdBalanceBefore)
+                .toString()
         );
-    }
+    };
 
     const makeAllChecks = async () => {
         console.log("TOKENS LEFT IN CONTRACT");
         console.log("usd:", (await usd.balanceOf(chamber.address)).toString());
-        console.log("weth:", (await weth.balanceOf(chamber.address)).toString());
-        console.log("matic:", (await ethers.provider.getBalance(chamber.address)).toString());
-        console.log("wmatic:", (await wmatic.balanceOf(chamber.address)).toString());
+        console.log(
+            "weth:",
+            (await weth.balanceOf(chamber.address)).toString()
+        );
+        console.log(
+            "matic:",
+            (await ethers.provider.getBalance(chamber.address)).toString()
+        );
+        console.log(
+            "wmatic:",
+            (await wmatic.balanceOf(chamber.address)).toString()
+        );
 
         console.log("TOKENS IN UNI POSITION:");
         console.log((await chamber.calculateCurrentPoolReserves()).toString());
         console.log("TOKENS IN AAVE POSITION");
-        console.log("COLLATERAL TOKENS ($):", (await chamber.getAUSDCTokenBalance()).toString());
+        console.log(
+            "COLLATERAL TOKENS ($):",
+            (await chamber.getAUSDCTokenBalance()).toString()
+        );
         console.log("DEBT TOKENS:");
         console.log(
-            "DEPT IN MATIC:", (await chamber.getVWMATICTokenBalance()).toString(),
-            "\nDEPT IN WETH:", (await chamber.getVWETHTokenBalance()).toString()
+            "DEPT IN MATIC:",
+            (await chamber.getVWMATICTokenBalance()).toString(),
+            "\nDEPT IN WETH:",
+            (await chamber.getVWETHTokenBalance()).toString()
         );
         console.log("LTV IS:", (await chamber.currentLTV()).toString());
 
-        console.log("TOTAL USD BALANCE:", (await chamber.currentUSDBalance()).toString());
-    }
+        console.log(
+            "TOTAL USD BALANCE:",
+            (await chamber.currentUSDBalance()).toString()
+        );
+    };
 
     // =================================
     // Main tests
@@ -258,7 +280,8 @@ describe("maticToEthPriceFall", function () {
         await chamber.setLTV(
             currNetworkConfig.targetLTV,
             currNetworkConfig.minLTV,
-            currNetworkConfig.maxLTV
+            currNetworkConfig.maxLTV,
+            currNetworkConfig.hedgeDev
         );
 
         await chamber.deployed();
@@ -345,63 +368,98 @@ describe("maticToEthPriceFall", function () {
         it("user1 mints 1500$", async function () {
             await makeDeposit(user1, 1500 * 1e6);
         });
-    })
+    });
 
     describe("checks 1 | first circuit", async function () {
         it("makes all checks", async function () {
             await makeAllChecks();
-        })
-    })
+        });
+    });
 
     describe("should make swaps in uni pools, so our position collect some fees | first circuit", async function () {
         let WethWmaticPrices, WethUsdcPrices;
 
         it("makes all swaps", async function () {
+            console.log(
+                "matic/usd",
+                await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18)
+            );
+            console.log(
+                "usd/weth",
+                await getPriceFromPair(weth, usd, 500, 1e18, 1e6)
+            );
+            console.log(
+                "matic/weth",
+                await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18)
+            );
 
-            console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
-            console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
-            console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
+            await wmatic
+                .connect(donorWallet)
+                .deposit({ value: ethers.utils.parseEther("1000000") });
 
-            await wmatic.connect(donorWallet).deposit({ value: ethers.utils.parseEther("1000000") });
-            
             for (let i = 0; i < 20; i++) {
                 let balanceBefore = await wmatic.balanceOf(donorWallet.address);
                 await makeSwap(donorWallet, 100000, true);
                 await makeSwap(
                     donorWallet,
-                    ethers.utils.formatEther((await wmatic.balanceOf(donorWallet.address)).sub(balanceBefore)),
+                    ethers.utils.formatEther(
+                        (
+                            await wmatic.balanceOf(donorWallet.address)
+                        ).sub(balanceBefore)
+                    ),
                     false
                 );
             }
 
             WethWmaticPrices = await getPriceFromPair(
-                weth, wmatic, 500, 1e18, 1e18
+                weth,
+                wmatic,
+                500,
+                1e18,
+                1e18
             );
-            WethUsdcPrices = await getPriceFromPair(
-                weth, usd, 500, 1e18, 1e6
-            );
-            const wmaticTargetPrice = Math.round((WethUsdcPrices[1] / WethWmaticPrices[1]) * 1e8) * 1e10
+            WethUsdcPrices = await getPriceFromPair(weth, usd, 500, 1e18, 1e6);
+            const wmaticTargetPrice =
+                Math.round((WethUsdcPrices[1] / WethWmaticPrices[1]) * 1e8) *
+                1e10;
 
-            if (((await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0]) * 1e18 < BigNumber.from(wmaticTargetPrice.toString())) {
+            if (
+                (await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0] *
+                    1e18 <
+                BigNumber.from(wmaticTargetPrice.toString())
+            ) {
                 while (
-                    ((await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0]) * 1e18 < BigNumber.from(wmaticTargetPrice.toString())
+                    (await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0] *
+                        1e18 <
+                    BigNumber.from(wmaticTargetPrice.toString())
                 ) {
                     makeSwapHelper(donorWallet, 5000, true);
                 }
             } else {
                 while (
-                    (((await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0]) * 1e18 > BigNumber.from(wmaticTargetPrice.toString()))
+                    (await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0] *
+                        1e18 >
+                    BigNumber.from(wmaticTargetPrice.toString())
                 ) {
                     makeSwapHelper(donorWallet, 4000, false);
                 }
             }
 
-            console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
-            console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
-            console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
+            console.log(
+                "matic/usd",
+                await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18)
+            );
+            console.log(
+                "usd/weth",
+                await getPriceFromPair(weth, usd, 500, 1e18, 1e6)
+            );
+            console.log(
+                "matic/weth",
+                await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18)
+            );
 
-            mine(1000, { interval: 72 })
-        })
+            mine(1000, { interval: 72 });
+        });
 
         it("should set all oracles", async function () {
             await setNewOraclePrice(weth, Math.round(WethUsdcPrices[1] * 1e8));
@@ -409,31 +467,31 @@ describe("maticToEthPriceFall", function () {
                 wmatic,
                 Math.round((WethUsdcPrices[1] / WethWmaticPrices[1]) * 1e8)
             );
-        })
-    })
+        });
+    });
 
     describe("checks 2 | first circuit", async function () {
         it("makes all checks", async function () {
             await makeAllChecks();
-        })
-    })
+        });
+    });
 
     describe("users burn all their positions | first circuit", async function () {
         it("owner burns his position", async function () {
             const toBurn = await chamber.s_userShares(owner.address);
             await makeBurn(owner, toBurn);
-        })
+        });
 
         it("user1 burns his position", async function () {
             const toBurn = await chamber.s_userShares(user1.address);
             await makeBurn(user1, toBurn);
-        })
+        });
 
         it("user2 burns his position", async function () {
             const toBurn = await chamber.s_userShares(user2.address);
             await makeBurn(user2, toBurn);
-        })
-    })
+        });
+    });
 
     describe("checks 3 | first circuit", async function () {
         it("makes all checks", async function () {
@@ -554,6 +612,6 @@ describe("maticToEthPriceFall", function () {
     describe("checks 3 | second circuit", async function () {
         it("makes all checks", async function () {
             await makeAllChecks();
-        })
-    })
+        });
+    });
 });

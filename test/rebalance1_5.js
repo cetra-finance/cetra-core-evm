@@ -280,7 +280,8 @@ describe("maticToEthPriceRise", function () {
         await chamber.setLTV(
             currNetworkConfig.targetLTV,
             currNetworkConfig.minLTV,
-            currNetworkConfig.maxLTV
+            currNetworkConfig.maxLTV,
+            currNetworkConfig.hedgeDev
         );
 
         await chamber.deployed();
@@ -379,12 +380,22 @@ describe("maticToEthPriceRise", function () {
         let WethWmaticPrices, WethUsdcPrices;
 
         it("makes all swaps", async function () {
+            console.log(
+                "matic/usd",
+                await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18)
+            );
+            console.log(
+                "usd/weth",
+                await getPriceFromPair(weth, usd, 500, 1e18, 1e6)
+            );
+            console.log(
+                "matic/weth",
+                await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18)
+            );
 
-            console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
-            console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
-            console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
-
-            await wmatic.connect(donorWallet).deposit({ value: ethers.utils.parseEther("1000000") });
+            await wmatic
+                .connect(donorWallet)
+                .deposit({ value: ethers.utils.parseEther("1000000") });
 
             for (let i = 0; i < 20; i++) {
                 await makeSwap(donorWallet, 100000, true);
@@ -425,12 +436,21 @@ describe("maticToEthPriceRise", function () {
                 }
             }
 
-            console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
-            console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
-            console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
+            console.log(
+                "matic/usd",
+                await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18)
+            );
+            console.log(
+                "usd/weth",
+                await getPriceFromPair(weth, usd, 500, 1e18, 1e6)
+            );
+            console.log(
+                "matic/weth",
+                await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18)
+            );
 
-            mine(1000, { interval: 72 })
-        })
+            mine(1000, { interval: 72 });
+        });
 
         it("should set all oracles", async function () {
             await setNewOraclePrice(weth, Math.round(WethUsdcPrices[1] * 1e8));

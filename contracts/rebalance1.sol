@@ -61,6 +61,7 @@ contract ChamberV1 is
     uint256 private s_targetLTV;
     uint256 private s_minLTV;
     uint256 private s_maxLTV;
+    uint256 private s_hedgeDev;
 
     address private immutable i_usdcAddress;
     address private immutable i_wethAddress;
@@ -161,7 +162,41 @@ contract ChamberV1 is
         );
     }
 
-    function performUpkeep(bytes calldata /* performData */) external override lock {
+    function checkUpkeep(
+        bytes memory /* checkData */
+    )
+        public
+        view
+        override
+        returns (bool upkeepNeeded, bytes memory /* performData */)
+    {
+        uint256 _currentLTV = currentLTV();
+        (uint256 wmaticPool, uint256 wethPool) = calculateCurrentPoolReserves();
+        uint256 wmaticBorrowed = getVWMATICTokenBalance();
+        uint256 wethBorrowed = getVWETHTokenBalance();
+        bool tooMuchExposureTakenWeth = (wethBorrowed > wethPool)
+            ? (((wethBorrowed - wethPool) * PRECISION) / wethPool > s_hedgeDev)
+            : (
+                (((wethPool - wethBorrowed) * PRECISION) / wethPool >
+                    s_hedgeDev)
+            );
+        bool tooMuchExposureTakenWMatic = (wmaticBorrowed > wmaticPool)
+            ? (((wmaticBorrowed - wmaticPool) * PRECISION) / wmaticPool >
+                s_hedgeDev)
+            : (
+                (((wmaticPool - wmaticBorrowed) * PRECISION) / wmaticPool >
+                    s_hedgeDev)
+            );
+        upkeepNeeded =
+            (_currentLTV >= s_maxLTV ||
+                _currentLTV <= s_minLTV ||
+                tooMuchExposureTakenWeth ||
+                tooMuchExposureTakenWMatic) &&
+            (s_totalShares != 0);
+        return (upkeepNeeded, "0x0");
+    }
+
+    function performUpkeep(bytes calldata /* performData */) external override {
         (bool upkeepNeeded, ) = checkUpkeep("");
         // require(upkeepNeeded, "Upkeep not needed");
         if (!upkeepNeeded) {
@@ -184,18 +219,12 @@ contract ChamberV1 is
         if (!s_liquidityTokenId) {
             s_lowerTick = ((currentTick - 700) / 10) * 10;
             s_upperTick = ((currentTick + 700) / 10) * 10;
-            (amount0, amount1) = calculatePoolReserves(
-                currentTick,
-                uint128(1e18)
-            );
+            (amount0, amount1) = calculatePoolReserves(uint128(1e18));
             usedLTV = s_targetLTV;
             s_liquidityTokenId = true;
         } else {
             usedLTV = currentLTV();
-            (amount0, amount1) = calculatePoolReserves(
-                currentTick,
-                getLiquidity()
-            );
+            (amount0, amount1) = calculateCurrentPoolReserves();
         }
 
         i_aaveV3Pool.supply(
@@ -264,7 +293,7 @@ contract ChamberV1 is
 
     function _burn(uint256 _shares) internal {
         (uint256 burnWMATIC, uint256 burnWETH) = _withdraw(
-            uint128((getPositionLiquidity() * _shares) / s_totalShares)
+            uint128((getLiquidity() * _shares) / s_totalShares)
         );
 
         uint256 amountWmatic = burnWMATIC +
@@ -466,7 +495,6 @@ contract ChamberV1 is
     function _withdraw(
         uint128 liquidityToBurn
     ) internal returns (uint256, uint256) {
-
         (uint256 burnWMATIC, uint256 burnWETH) = i_uniswapPool.burn(
             s_lowerTick,
             s_upperTick,
@@ -488,22 +516,6 @@ contract ChamberV1 is
     // =================================
     // View funcitons
     // =================================
-
-    function checkUpkeep(
-        bytes memory /* checkData */
-    )
-        public
-        view
-        override
-        returns (bool upkeepNeeded, bytes memory /* performData */)
-    {
-        uint256 _currentLTV = currentLTV();
-        bool ltvOutOfBounds = _currentLTV >= s_maxLTV ||
-            _currentLTV <= s_minLTV;
-        bool fundsDeposited = s_totalShares != 0;
-        upkeepNeeded = (ltvOutOfBounds && fundsDeposited);
-        return (upkeepNeeded, "0x0");
-    }
 
     function currentUSDBalance() public view returns (uint256) {
         (
@@ -584,15 +596,29 @@ contract ChamberV1 is
         return sqrtRatioX96;
     }
 
+    function calculatePoolReserves(
+        uint128 liquidity
+    ) internal view returns (uint256, uint256) {
+        uint256 amount0;
+        uint256 amount1;
+        (amount0, amount1) = LiquidityAmounts.getAmountsForLiquidity(
+            getSqrtRatioX96(),
+            MathHelper.getSqrtRatioAtTick(s_lowerTick),
+            MathHelper.getSqrtRatioAtTick(s_upperTick),
+            liquidity
+        );
+        return (amount0, amount1);
+    }
+
     function calculateCurrentPoolReserves()
         public
         view
-        returns (uint256 amount0Current, uint256 amount1Current)
+        returns (uint256, uint256)
     {
         uint128 liquidity = getLiquidity();
 
         // compute current holdings from liquidity
-        (amount0Current, amount1Current) = LiquidityAmounts
+        (uint256 amount0Current, uint256 amount1Current) = LiquidityAmounts
             .getAmountsForLiquidity(
                 getSqrtRatioX96(),
                 MathHelper.getSqrtRatioAtTick(s_lowerTick),
@@ -704,26 +730,6 @@ contract ChamberV1 is
                 )) / 1e27;
     }
 
-    function getPositionLiquidity() public view returns (uint128) {
-        (uint128 liquidity, , , , ) = i_uniswapPool.positions(_getPositionID());
-        return liquidity;
-    }
-
-    function calculatePoolReserves(
-        int24 _currentTick,
-        uint128 liquidity
-    ) internal view returns (uint256, uint256) {
-        uint256 amount0;
-        uint256 amount1;
-        (amount0, amount1) = LiquidityAmounts.getAmountsForLiquidity(
-            MathHelper.getSqrtRatioAtTick(_currentTick),
-            MathHelper.getSqrtRatioAtTick(s_lowerTick),
-            MathHelper.getSqrtRatioAtTick(s_upperTick),
-            liquidity
-        );
-        return (amount0, amount1);
-    }
-
     // =================================
     // Callbacks
     // =================================
@@ -761,10 +767,12 @@ contract ChamberV1 is
     function setLTV(
         uint256 _targetLTV,
         uint256 _minLTV,
-        uint256 _maxLTV
+        uint256 _maxLTV,
+        uint256 _hedgeDev
     ) public onlyOwner {
         s_targetLTV = _targetLTV;
         s_minLTV = _minLTV;
         s_maxLTV = _maxLTV;
+        s_hedgeDev = _hedgeDev;
     }
 }
