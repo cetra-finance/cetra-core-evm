@@ -258,7 +258,8 @@ describe("maticToEthPriceFall", function () {
         await chamber.setLTV(
             currNetworkConfig.targetLTV,
             currNetworkConfig.minLTV,
-            currNetworkConfig.maxLTV
+            currNetworkConfig.maxLTV,
+            currNetworkConfig.hedgeDev
         );
 
         await chamber.deployed();
