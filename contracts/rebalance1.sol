@@ -224,6 +224,9 @@ contract ChamberV1 is
         } else {
             usedLTV = currentLTV();
         }
+        if (usedLTV < (10 * PRECISION) / 100) {
+            usedLTV = s_targetLTV;
+        }
         (amount0, amount1) = calculatePoolReserves(uint128(1e18));
 
         i_aaveV3Pool.supply(
