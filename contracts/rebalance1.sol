@@ -3,6 +3,7 @@ pragma solidity >=0.8.0;
 pragma abicoder v2;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/AutomationCompatibleInterface.sol";
 
 import "./Uniswap/utils/LiquidityAmounts.sol";
 import "./Uniswap/interfaces/ISwapRouter.sol";
@@ -27,8 +28,13 @@ error ChamberV1__SwappedWmaticForWethStillCantRepay();
 error ChamberV1__SwappedUsdcForWethStillCantRepay();
 error ChamberV1__CallerIsNotUniPool();
 error ChamberV1__sharesWorthMoreThenDep();
+error ChamberV1__UpkeepNotNeeded(uint256 _currentLTV, uint256 _totalShares);
 
-contract ChamberV1 is Ownable, IUniswapV3MintCallback {
+contract ChamberV1 is
+    Ownable,
+    IUniswapV3MintCallback,
+    AutomationCompatibleInterface
+{
     // =================================
     // Storage for users and their deposits
     // =================================
@@ -77,7 +83,7 @@ contract ChamberV1 is Ownable, IUniswapV3MintCallback {
     // =================================
 
     modifier lock() {
-        require(unlocked, 'LOK');
+        require(unlocked, "LOK");
         unlocked = false;
         _;
         unlocked = true;
@@ -154,9 +160,34 @@ contract ChamberV1 is Ownable, IUniswapV3MintCallback {
         );
     }
 
-    function rebalance() external lock {
+    function rebalance() private lock {
         _burn(s_totalShares);
         _mint(TransferHelper.safeGetBalance(i_usdcAddress, address(this)));
+    }
+
+    function checkUpkeep(
+        bytes memory /* checkData */
+    )
+        public
+        view
+        override
+        returns (bool upkeepNeeded, bytes memory /* performData */)
+    {
+        uint256 _currentLTV = currentLTV();
+        bool ltvOutOfBounds = _currentLTV >= s_maxLTV ||
+            _currentLTV <= s_minLTV;
+        bool fundsDeposited = s_totalShares != 0;
+        upkeepNeeded = (ltvOutOfBounds && fundsDeposited);
+        return (upkeepNeeded, "0x0");
+    }
+
+    function performUpkeep(bytes calldata /* performData */) external override {
+        (bool upkeepNeeded, ) = checkUpkeep("");
+        // require(upkeepNeeded, "Upkeep not needed");
+        if (!upkeepNeeded) {
+            revert ChamberV1__UpkeepNotNeeded(currentLTV(), s_totalShares);
+        }
+        rebalance();
     }
 
     // =================================
@@ -786,5 +817,4 @@ contract ChamberV1 is Ownable, IUniswapV3MintCallback {
         s_minLTV = _minLTV;
         s_maxLTV = _maxLTV;
     }
-
 }
