@@ -219,13 +219,12 @@ contract ChamberV1 is
         if (!s_liquidityTokenId) {
             s_lowerTick = ((currentTick - 700) / 10) * 10;
             s_upperTick = ((currentTick + 700) / 10) * 10;
-            (amount0, amount1) = calculatePoolReserves(uint128(1e18));
             usedLTV = s_targetLTV;
             s_liquidityTokenId = true;
         } else {
             usedLTV = currentLTV();
-            (amount0, amount1) = calculateCurrentPoolReserves();
         }
+        (amount0, amount1) = calculatePoolReserves(uint128(1e18));
 
         i_aaveV3Pool.supply(
             i_usdcAddress,
