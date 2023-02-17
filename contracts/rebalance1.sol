@@ -592,7 +592,10 @@ contract ChamberV1 is
         if (totalCollateralETH == 0) {
             return 0;
         }
-        return (PRECISION * totalBorrowedETH) / totalCollateralETH;
+        uint256 ltv = totalCollateralETH == 0
+            ? 0
+            : (PRECISION * totalBorrowedETH) / totalCollateralETH;
+        return ltv;
     }
 
     function sharesWorth(uint256 shares) public view returns (uint256) {
