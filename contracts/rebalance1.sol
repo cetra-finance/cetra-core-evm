@@ -19,6 +19,8 @@ import "./AaveInterfaces/IVariableDebtToken.sol";
 import "./TransferHelper.sol";
 import "./MathHelper.sol";
 
+import "hardhat/console.sol";
+
 /*Errors */
 error ChamberV1__AaveDepositError();
 error ChamberV1__UserRepaidMoreEthThanOwned();
@@ -46,7 +48,6 @@ contract ChamberV1 is
     // Storage for pool
     // =================================
 
-    uint256 private s_usdBalance;
     int24 private s_lowerTick;
     int24 private s_upperTick;
     bool private s_liquidityTokenId;
@@ -124,7 +125,7 @@ contract ChamberV1 is
     function mint(uint256 usdAmount) external lock {
         {
             uint256 currUsdBalance = currentUSDBalance();
-            uint256 sharesToMint = (currUsdBalance != 0)
+            uint256 sharesToMint = (currUsdBalance > 10)
                 ? ((usdAmount * s_totalShares) / (currUsdBalance))
                 : usdAmount;
             s_totalShares += sharesToMint;
@@ -263,8 +264,7 @@ contract ChamberV1 is
 
     function _burn(uint256 _shares) internal {
         (uint256 burnWMATIC, uint256 burnWETH) = _withdraw(
-            uint128((getPositionLiquidity() * _shares) / s_totalShares),
-            _shares
+            uint128((getPositionLiquidity() * _shares) / s_totalShares)
         );
 
         uint256 amountWmatic = burnWMATIC +
@@ -464,17 +464,8 @@ contract ChamberV1 is
     }
 
     function _withdraw(
-        uint128 liquidityToBurn,
-        uint256 _shares
+        uint128 liquidityToBurn
     ) internal returns (uint256, uint256) {
-        uint256 preBalanceWMATIC = TransferHelper.safeGetBalance(
-            i_wmaticAddress,
-            address(this)
-        );
-        uint256 preBalanceWETH = TransferHelper.safeGetBalance(
-            i_wethAddress,
-            address(this)
-        );
 
         (uint256 burnWMATIC, uint256 burnWETH) = i_uniswapPool.burn(
             s_lowerTick,
@@ -598,13 +589,7 @@ contract ChamberV1 is
         view
         returns (uint256 amount0Current, uint256 amount1Current)
     {
-        (
-            uint128 liquidity,
-            uint256 feeGrowthInside0Last,
-            uint256 feeGrowthInside1Last,
-            uint128 tokensOwed0,
-            uint128 tokensOwed1
-        ) = i_uniswapPool.positions(_getPositionID());
+        uint128 liquidity = getLiquidity();
 
         // compute current holdings from liquidity
         (amount0Current, amount1Current) = LiquidityAmounts
