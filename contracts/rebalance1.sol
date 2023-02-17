@@ -262,7 +262,7 @@ contract ChamberV1 is
     }
 
     function _burn(uint256 _shares) internal {
-        (uint256 burnWMATIC, uint256 burnWETH, , ) = _withdraw(
+        (uint256 burnWMATIC, uint256 burnWETH) = _withdraw(
             uint128((getPositionLiquidity() * _shares) / s_totalShares),
             _shares
         );
@@ -423,29 +423,6 @@ contract ChamberV1 is
         return (amountOut);
     }
 
-    function swapExactAssetToAsset(
-        address assetIn,
-        address assetOut,
-        uint256 amountIn
-    ) internal returns (uint256) {
-        uint256 amountOut = i_uniswapSwapRouter.exactInput(
-            ISwapRouter.ExactInputParams({
-                path: abi.encodePacked(
-                    assetIn,
-                    uint24(500),
-                    i_usdcAddress,
-                    uint24(500),
-                    assetOut
-                ),
-                recipient: address(this),
-                deadline: block.timestamp,
-                amountIn: amountIn,
-                amountOutMinimum: 0
-            })
-        );
-        return (amountOut);
-    }
-
     function swapStableToExactAsset(
         address assetOut,
         uint256 amountOut
@@ -489,7 +466,7 @@ contract ChamberV1 is
     function _withdraw(
         uint128 liquidityToBurn,
         uint256 _shares
-    ) internal returns (uint256, uint256, uint256, uint256) {
+    ) internal returns (uint256, uint256) {
         uint256 preBalanceWMATIC = TransferHelper.safeGetBalance(
             i_wmaticAddress,
             address(this)
@@ -513,20 +490,8 @@ contract ChamberV1 is
             type(uint128).max,
             type(uint128).max
         );
-        uint256 feeWMATIC = ((TransferHelper.safeGetBalance(
-            i_wmaticAddress,
-            address(this)
-        ) -
-            preBalanceWMATIC -
-            burnWMATIC) * _shares) / s_totalShares;
-        uint256 feeWETH = ((TransferHelper.safeGetBalance(
-            i_wethAddress,
-            address(this)
-        ) -
-            preBalanceWETH -
-            burnWETH) * _shares) / s_totalShares;
 
-        return (burnWMATIC, burnWETH, feeWMATIC, feeWETH);
+        return (burnWMATIC, burnWETH);
     }
 
     // =================================
@@ -663,7 +628,7 @@ contract ChamberV1 is
         view
         returns (uint256 fee0, uint256 fee1)
     {
-        (, int24 tick, , , , , ) = i_uniswapPool.slot0();
+        int24 tick = getTick();
         (
             uint128 liquidity,
             uint256 feeGrowthInside0Last,
