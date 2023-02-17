@@ -589,9 +589,6 @@ contract ChamberV1 is
             ,
 
         ) = i_aaveV3Pool.getUserAccountData(address(this));
-        if (totalCollateralETH == 0) {
-            return 0;
-        }
         uint256 ltv = totalCollateralETH == 0
             ? 0
             : (PRECISION * totalBorrowedETH) / totalCollateralETH;
