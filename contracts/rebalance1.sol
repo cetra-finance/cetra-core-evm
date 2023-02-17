@@ -174,19 +174,27 @@ contract ChamberV1 is
         (uint256 wmaticPool, uint256 wethPool) = calculateCurrentPoolReserves();
         uint256 wmaticBorrowed = getVWMATICTokenBalance();
         uint256 wethBorrowed = getVWETHTokenBalance();
-        bool tooMuchExposureTakenWeth = (wethBorrowed > wethPool)
-            ? (((wethBorrowed - wethPool) * PRECISION) / wethPool > s_hedgeDev)
-            : (
-                (((wethPool - wethBorrowed) * PRECISION) / wethPool >
+        bool tooMuchExposureTakenWeth;
+        bool tooMuchExposureTakenWMatic;
+        if (wmaticPool == 0 || wethPool == 0) {
+            tooMuchExposureTakenWeth = true;
+            tooMuchExposureTakenWMatic = true;
+        } else {
+            tooMuchExposureTakenWeth = (wethBorrowed > wethPool)
+                ? (((wethBorrowed - wethPool) * PRECISION) / wethPool >
                     s_hedgeDev)
-            );
-        bool tooMuchExposureTakenWMatic = (wmaticBorrowed > wmaticPool)
-            ? (((wmaticBorrowed - wmaticPool) * PRECISION) / wmaticPool >
-                s_hedgeDev)
-            : (
-                (((wmaticPool - wmaticBorrowed) * PRECISION) / wmaticPool >
+                : (
+                    (((wethPool - wethBorrowed) * PRECISION) / wethPool >
+                        s_hedgeDev)
+                );
+            tooMuchExposureTakenWMatic = (wmaticBorrowed > wmaticPool)
+                ? (((wmaticBorrowed - wmaticPool) * PRECISION) / wmaticPool >
                     s_hedgeDev)
-            );
+                : (
+                    (((wmaticPool - wmaticBorrowed) * PRECISION) / wmaticPool >
+                        s_hedgeDev)
+                );
+        }
         upkeepNeeded =
             (_currentLTV >= s_maxLTV ||
                 _currentLTV <= s_minLTV ||
