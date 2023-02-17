@@ -6,7 +6,7 @@ const helpers = require("@nomicfoundation/hardhat-network-helpers");
 const { mine } = require("@nomicfoundation/hardhat-network-helpers");
 const JSBI = require("jsbi");
 
-describe("maticToEthPriceFall", function () {
+describe("maticToEthPriceConst", function () {
     let owner, _, user1, user2, donorWallet;
     let usd, weth;
     let aaveOracle, UniRouter;
@@ -180,7 +180,7 @@ describe("maticToEthPriceFall", function () {
         await chamber.connect(user).mint(amount);
         expect(await chamber.currentUSDBalance()).to.be.closeTo(
             contractBalanceBefore.add(amount),
-            100
+            10
         );
         // expect(await chamber.sharesWorth(await chamber.s_userShares(user.address))).to.be.closeTo(userInnerBalanceBefore.add(amount), 10);
     };
@@ -348,7 +348,7 @@ describe("maticToEthPriceFall", function () {
             );
     });
 
-    describe("every user mints | first circuit", async function () {
+    describe("every user mints", async function () {
         it("owner mints 1000$", async function () {
             await makeDeposit(owner, 1000 * 1e6);
         });
@@ -370,42 +370,34 @@ describe("maticToEthPriceFall", function () {
         });
     });
 
-    describe("checks 1 | first circuit", async function () {
+    describe("checks 1", async function () {
         it("makes all checks", async function () {
             await makeAllChecks();
         });
     });
 
-    describe("should make swaps in uni pools, so our position collect some fees | first circuit", async function () {
+    describe("should make swaps in uni pools, so our position collect some fees", async function () {
         let WethWmaticPrices, WethUsdcPrices;
 
         it("makes all swaps", async function () {
-            console.log(
-                "matic/usd",
-                await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18)
-            );
-            console.log(
-                "usd/weth",
-                await getPriceFromPair(weth, usd, 500, 1e18, 1e6)
-            );
-            console.log(
-                "matic/weth",
-                await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18)
-            );
 
+            console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
+            console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
+            console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
+            
             await wmatic
                 .connect(donorWallet)
                 .deposit({ value: ethers.utils.parseEther("1000000") });
 
-            for (let i = 0; i < 20; i++) {
+            for (let i = 0; i < 10; i++) {
                 let balanceBefore = await wmatic.balanceOf(donorWallet.address);
                 await makeSwap(donorWallet, 100000, true);
                 await makeSwap(
                     donorWallet,
                     ethers.utils.formatEther(
-                        (
-                            await wmatic.balanceOf(donorWallet.address)
-                        ).sub(balanceBefore)
+                        (await wmatic.balanceOf(donorWallet.address))
+                            .sub(balanceBefore)
+                            .add(ethers.utils.parseEther("6000"))
                     ),
                     false
                 );
@@ -445,21 +437,12 @@ describe("maticToEthPriceFall", function () {
                 }
             }
 
-            console.log(
-                "matic/usd",
-                await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18)
-            );
-            console.log(
-                "usd/weth",
-                await getPriceFromPair(weth, usd, 500, 1e18, 1e6)
-            );
-            console.log(
-                "matic/weth",
-                await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18)
-            );
+            console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
+            console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
+            console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
 
-            mine(1000, { interval: 72 });
-        });
+            mine(1000, { interval: 50000 })
+        })
 
         it("should set all oracles", async function () {
             await setNewOraclePrice(weth, Math.round(WethUsdcPrices[1] * 1e8));
@@ -470,146 +453,46 @@ describe("maticToEthPriceFall", function () {
         });
     });
 
-    describe("checks 2 | first circuit", async function () {
-        it("makes all checks", async function () {
-            await makeAllChecks();
-        });
-    });
-
-    describe("users burn all their positions | first circuit", async function () {
-        it("owner burns his position", async function () {
-            const toBurn = await chamber.s_userShares(owner.address);
-            await makeBurn(owner, toBurn);
-        });
-
-        it("user1 burns his position", async function () {
-            const toBurn = await chamber.s_userShares(user1.address);
-            await makeBurn(user1, toBurn);
-        });
-
-        it("user2 burns his position", async function () {
-            const toBurn = await chamber.s_userShares(user2.address);
-            await makeBurn(user2, toBurn);
-        });
-    });
-
-    describe("checks 3 | first circuit", async function () {
+    describe("checks 2", async function () {
         it("makes all checks", async function () {
             await makeAllChecks();
         })
     })
 
-    describe("every user mints | second circuit", async function () {
-        it("owner mints 1000$", async function () {
+    describe("Should make rebalance and owner deps", async function () {
+        it("makes rebalance", async function () {
+            await chamber.performUpkeep("0x")
+        })
+
+        it("owner deposits 1000$", async function () {
             await makeDeposit(owner, 1000 * 1e6);
-        });
-
-        it("user1 mints 1500$", async function () {
-            await makeDeposit(user1, 1500 * 1e6);
-        });
-
-        it("user2 mints 2500$", async function () {
-            await makeDeposit(user2, 2500 * 1e6);
-        });
-
-        it("user2 mints 2500$", async function () {
-            await makeDeposit(user2, 2500 * 1e6);
-        });
-
-        it("user1 mints 1500$", async function () {
-            await makeDeposit(user1, 1500 * 1e6);
-        });
+        })
     })
 
-    describe("checks 1 | second circuit", async function () {
+    describe("checks 3", async function () {
         it("makes all checks", async function () {
             await makeAllChecks();
-        })
-    })
+        });
+    });
 
-    describe("should make swaps in uni pools, so our position collect some fees | second circuit", async function () {
-        let WethWmaticPrices, WethUsdcPrices;
-
-        it("makes all swaps", async function () {
-
-            console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
-            console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
-            console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
-
-            await wmatic.connect(donorWallet).deposit({ value: ethers.utils.parseEther("1000000") });
-            
-            for (let i = 0; i < 20; i++) {
-                let balanceBefore = await wmatic.balanceOf(donorWallet.address);
-                await makeSwap(donorWallet, 100000, true);
-                await makeSwap(
-                    donorWallet,
-                    ethers.utils.formatEther((await wmatic.balanceOf(donorWallet.address)).sub(balanceBefore)),
-                    false
-                );
-            }
-
-            WethWmaticPrices = await getPriceFromPair(
-                weth, wmatic, 500, 1e18, 1e18
-            );
-            WethUsdcPrices = await getPriceFromPair(
-                weth, usd, 500, 1e18, 1e6
-            );
-            const wmaticTargetPrice = Math.round((WethUsdcPrices[1] / WethWmaticPrices[1]) * 1e8) * 1e10
-
-            if (((await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0]) * 1e18 < BigNumber.from(wmaticTargetPrice.toString())) {
-                while (
-                    ((await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0]) * 1e18 < BigNumber.from(wmaticTargetPrice.toString())
-                ) {
-                    makeSwapHelper(donorWallet, 5000, true);
-                }
-            } else {
-                while (
-                    (((await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0]) * 1e18 > BigNumber.from(wmaticTargetPrice.toString()))
-                ) {
-                    makeSwapHelper(donorWallet, 4000, false);
-                }
-            }
-
-            console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
-            console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
-            console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
-
-            mine(1000, { interval: 72 })
-        })
-
-        it("should set all oracles | second circuit", async function () {
-            await setNewOraclePrice(weth, Math.round(WethUsdcPrices[1] * 1e8));
-            await setNewOraclePrice(
-                wmatic,
-                Math.round((WethUsdcPrices[1] / WethWmaticPrices[1]) * 1e8)
-            );
-        })
-    })
-
-    describe("checks 2 | second circuit", async function () {
-        it("makes all checks", async function () {
-            await makeAllChecks();
-        })
-    })
-
-    describe("users burn all their positions | second circuit", async function () {
+    describe("users burn all their positions", async function () {
         it("owner burns his position", async function () {
             const toBurn = await chamber.s_userShares(owner.address);
             await makeBurn(owner, toBurn);
-        })
+        });
 
         it("user1 burns his position", async function () {
             const toBurn = await chamber.s_userShares(user1.address);
             await makeBurn(user1, toBurn);
-        })
+        });
 
         it("user2 burns his position", async function () {
             const toBurn = await chamber.s_userShares(user2.address);
             await makeBurn(user2, toBurn);
-        })
-    })
+        });
+    });
 
-    describe("checks 3 | second circuit", async function () {
+    describe("checks 4", async function () {
         it("makes all checks", async function () {
             await makeAllChecks();
         });
