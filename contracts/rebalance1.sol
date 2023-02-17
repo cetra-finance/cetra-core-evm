@@ -253,15 +253,19 @@ contract ChamberV1 is
                 1e12) /
             PRECISION;
 
-        i_aaveV3Pool.borrow(
-            i_wmaticAddress,
-            wmaticToBorrow,
-            2,
-            0,
-            address(this)
-        );
+        if (wmaticToBorrow > 0) {
+            i_aaveV3Pool.borrow(
+                i_wmaticAddress,
+                wmaticToBorrow,
+                2,
+                0,
+                address(this)
+            );
+        }
 
-        i_aaveV3Pool.borrow(i_wethAddress, wethToBorrow, 2, 0, address(this));
+        if (wethToBorrow > 0) {
+            i_aaveV3Pool.borrow(i_wethAddress, wethToBorrow, 2, 0, address(this));
+        }
 
         {
             uint256 wmaticRecieved = TransferHelper.safeGetBalance(
