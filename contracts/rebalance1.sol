@@ -526,11 +526,6 @@ contract ChamberV1 is
     function _withdraw(
         uint128 liquidityToBurn
     ) private returns (uint256, uint256, uint256, uint256) {
-        (uint256 burnWmatic, uint256 burnWeth) = i_uniswapPool.burn(
-            s_lowerTick,
-            s_upperTick,
-            liquidityToBurn
-        );
         uint256 preBalanceWmatic = TransferHelper.safeGetBalance(
             i_wmaticAddress,
             address(this)
@@ -538,6 +533,11 @@ contract ChamberV1 is
         uint256 preBalanceWeth = TransferHelper.safeGetBalance(
             i_wethAddress,
             address(this)
+        );
+        (uint256 burnWmatic, uint256 burnWeth) = i_uniswapPool.burn(
+            s_lowerTick,
+            s_upperTick,
+            liquidityToBurn
         );
         i_uniswapPool.collect(
             address(this),
