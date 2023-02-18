@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT License
 pragma solidity >=0.8.0;
 pragma abicoder v2;
 
@@ -840,5 +840,4 @@ contract ChamberV1 is
         s_maxLTV = _maxLTV;
         s_hedgeDev = _hedgeDev;
     }
-
 }

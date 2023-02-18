@@ -1,10 +1,10 @@
 //const { ethers } = require("ethers");
 const { ethers } = require("hardhat");
 const { networkConfig } = require("../helper-hardhat-config");
-const fs = require('fs')
+const fs = require("fs");
 
 module.exports = async () => {
-
+    console.log(network.config.chainId);
     const currNetworkConfig = networkConfig[network.config.chainId];
 
     let args = [
@@ -15,7 +15,7 @@ module.exports = async () => {
         currNetworkConfig.aaveVWETHAddress,
         currNetworkConfig.aaveVWMATICAddress,
         currNetworkConfig.aaveOracleAddress,
-        currNetworkConfig.aaveAUSDCAddress
+        currNetworkConfig.aaveAUSDCAddress,
     ];
 
     let usd = await ethers.getContractAt(
@@ -31,7 +31,7 @@ module.exports = async () => {
         currNetworkConfig.wmaticAddress
     );
 
-    console.log("----------------------------------------------------")
+    console.log("----------------------------------------------------");
     const Rebalance = await ethers.getContractFactory("ChamberV1");
     const rebalance = await Rebalance.deploy(...args);
     await rebalance.deployed();
@@ -40,39 +40,60 @@ module.exports = async () => {
         currNetworkConfig.targetLTV,
         currNetworkConfig.minLTV,
         currNetworkConfig.maxLTV,
-        currNetworkConfig.hedgeDev,
+        currNetworkConfig.hedgeDev
     );
 
-    await rebalance
-        .giveApprove(usd.address, currNetworkConfig.aaveV3PoolAddress);
-    await rebalance
-        .giveApprove(usd.address, currNetworkConfig.uniswapRouterAddress);
-    await rebalance
-        .giveApprove(usd.address, currNetworkConfig.uniswapPoolAddress);
-    await rebalance
-        .giveApprove(usd.address, currNetworkConfig.aaveVWETHAddress);
+    await rebalance.giveApprove(
+        usd.address,
+        currNetworkConfig.aaveV3PoolAddress
+    );
+    await rebalance.giveApprove(
+        usd.address,
+        currNetworkConfig.uniswapRouterAddress
+    );
+    await rebalance.giveApprove(
+        usd.address,
+        currNetworkConfig.uniswapPoolAddress
+    );
+    await rebalance.giveApprove(
+        usd.address,
+        currNetworkConfig.aaveVWETHAddress
+    );
 
-    await rebalance
-        .giveApprove(weth.address, currNetworkConfig.aaveV3PoolAddress);
-    await rebalance
-        .giveApprove(weth.address, currNetworkConfig.uniswapRouterAddress);
-    await rebalance
-        .giveApprove(weth.address, currNetworkConfig.uniswapPoolAddress);
-    await rebalance
-        .giveApprove(weth.address, currNetworkConfig.aaveVWETHAddress);
+    await rebalance.giveApprove(
+        weth.address,
+        currNetworkConfig.aaveV3PoolAddress
+    );
+    await rebalance.giveApprove(
+        weth.address,
+        currNetworkConfig.uniswapRouterAddress
+    );
+    await rebalance.giveApprove(
+        weth.address,
+        currNetworkConfig.uniswapPoolAddress
+    );
+    await rebalance.giveApprove(
+        weth.address,
+        currNetworkConfig.aaveVWETHAddress
+    );
 
-    await rebalance
-        .giveApprove(wmatic.address, currNetworkConfig.aaveV3PoolAddress);
-    await rebalance
-        .giveApprove(
-            wmatic.address,
-            currNetworkConfig.uniswapRouterAddress
-        );
+    await rebalance.giveApprove(
+        wmatic.address,
+        currNetworkConfig.aaveV3PoolAddress
+    );
+    await rebalance.giveApprove(
+        wmatic.address,
+        currNetworkConfig.uniswapRouterAddress
+    );
 
-    console.log(`You have deployed an contract to ${rebalance.address}`)
-    console.log(`Verify with:\n npx hardhat verify --network matic ${rebalance.address} ${args.toString().replace(/,/g, " ")}`);
+    console.log(`You have deployed an contract to ${rebalance.address}`);
+    console.log(
+        `Verify with:\n npx hardhat verify --network matic ${
+            rebalance.address
+        } ${args.toString().replace(/,/g, " ")}`
+    );
 
-    console.log('done')
-}
+    console.log("done");
+};
 
-module.exports.tags = ['all', 'rebalance']
+module.exports.tags = ["all", "rebalance"];

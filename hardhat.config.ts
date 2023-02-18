@@ -29,6 +29,7 @@ module.exports = {
            }
         },
         matic: {
+            chainId:137,
             url: CUSTOM_RPC_URL,
             accounts: [PRIVATE_KEY],
         }
