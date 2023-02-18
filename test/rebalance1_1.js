@@ -213,7 +213,7 @@ describe("maticToEthPriceConst", function () {
         );
 
         console.log(
-            "Owner fees:", await chamber.getAdminBalance(),
+            "Owner fees:", (await chamber.getAdminBalance()).toString(),
         )
 
         console.log("TOKENS IN UNI POSITION:");
@@ -481,6 +481,18 @@ describe("maticToEthPriceConst", function () {
     });
 
     describe("checks 3", async function () {
+        it("makes all checks", async function () {
+            await makeAllChecks();
+        });
+    });
+
+    describe("Owner withdraw fees", async function () {
+        it("owner withdraws fees", async function () {
+            await chamber.connect(owner)._redeemFees();
+        })
+    })
+
+    describe("checks 4", async function () {
         it("makes all checks", async function () {
             await makeAllChecks();
         });

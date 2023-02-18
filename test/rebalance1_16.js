@@ -212,6 +212,10 @@ describe("maticToEthPriceConst", function () {
             (await wmatic.balanceOf(chamber.address)).toString()
         );
 
+        console.log(
+            "Owner fees:", (await chamber.getAdminBalance()).toString(),
+        )
+
         console.log("TOKENS IN UNI POSITION:");
         console.log((await chamber.calculateCurrentPoolReserves()).toString());
         console.log("TOKENS IN AAVE POSITION");

@@ -820,6 +820,8 @@ contract ChamberV1 is
     function _redeemFees() public onlyOwner {
         TransferHelper.safeTransfer(i_wmaticAddress, owner(), s_cetraFeeWmatic);
         TransferHelper.safeTransfer(i_wethAddress, owner(), s_cetraFeeWeth);
+        s_cetraFeeWmatic = 0;
+        s_cetraFeeWeth = 0;
     }
 
     function giveApprove(address _token, address _to) public onlyOwner {
