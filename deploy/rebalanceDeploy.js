@@ -5,6 +5,8 @@ const fs = require('fs')
 
 module.exports = async () => {
 
+    const currNetworkConfig = networkConfig[network.config.chainId];
+
     let args = [
         currNetworkConfig.uniswapRouterAddress,
         currNetworkConfig.uniswapPoolAddress,
