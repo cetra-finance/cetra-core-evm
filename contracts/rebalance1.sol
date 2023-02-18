@@ -65,7 +65,6 @@ contract ChamberV1 is
 
     uint256 private s_cetraFeeWmatic;
     uint256 private s_cetraFeeWeth;
-    uint256 private s_cetraFeeUsdc;
 
     address private immutable i_usdcAddress;
     address private immutable i_wethAddress;
