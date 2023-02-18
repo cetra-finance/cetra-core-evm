@@ -2,6 +2,9 @@
 pragma solidity >=0.8.0;
 pragma abicoder v2;
 
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/AutomationCompatibleInterface.sol";
+
 import "./Uniswap/utils/LiquidityAmounts.sol";
 import "./Uniswap/interfaces/ISwapRouter.sol";
 import "./Uniswap/interfaces/IUniswapV3Pool.sol";
@@ -20,13 +23,20 @@ import "hardhat/console.sol";
 
 /*Errors */
 error ChamberV1__AaveDepositError();
+error ChamberV1__UserRepaidMoreEthThanOwned();
+error ChamberV1__UserRepaidMoreMaticThanOwned();
 error ChamberV1__SwappedWethForWmaticStillCantRepay();
 error ChamberV1__SwappedWmaticForWethStillCantRepay();
 error ChamberV1__SwappedUsdcForWethStillCantRepay();
 error ChamberV1__CallerIsNotUniPool();
 error ChamberV1__sharesWorthMoreThenDep();
+error ChamberV1__UpkeepNotNeeded(uint256 _currentLTV, uint256 _totalShares);
 
-contract ChamberV1 is IUniswapV3MintCallback {
+contract ChamberV1 is
+    Ownable,
+    IUniswapV3MintCallback,
+    AutomationCompatibleInterface
+{
     // =================================
     // Storage for users and their deposits
     // =================================
@@ -38,7 +48,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
     // Storage for pool
     // =================================
 
-    uint256 private s_usdBalance;
     int24 private s_lowerTick;
     int24 private s_upperTick;
     bool private s_liquidityTokenId;
@@ -47,9 +56,12 @@ contract ChamberV1 is IUniswapV3MintCallback {
     // Storage for logic
     // =================================
 
+    bool private unlocked;
+
     uint256 private s_targetLTV;
     uint256 private s_minLTV;
     uint256 private s_maxLTV;
+    uint256 private s_hedgeDev;
 
     address private immutable i_usdcAddress;
     address private immutable i_wethAddress;
@@ -67,6 +79,17 @@ contract ChamberV1 is IUniswapV3MintCallback {
     IUniswapV3Pool private immutable i_uniswapPool;
 
     uint256 private constant PRECISION = 1e18;
+
+    // ================================
+    // Modifiers
+    // =================================
+
+    modifier lock() {
+        require(unlocked, "LOK");
+        unlocked = false;
+        _;
+        unlocked = true;
+    }
 
     // =================================
     // Constructor
@@ -93,46 +116,17 @@ contract ChamberV1 is IUniswapV3MintCallback {
         i_usdcAddress = i_aaveAUSDCToken.UNDERLYING_ASSET_ADDRESS();
         i_wethAddress = i_aaveVWETHToken.UNDERLYING_ASSET_ADDRESS();
         i_wmaticAddress = i_aaveVWMATICToken.UNDERLYING_ASSET_ADDRESS();
-    }
-
-    function setLTV(
-        uint256 _targetLTV,
-        uint256 _minLTV,
-        uint256 _maxLTV
-    ) public {
-        s_targetLTV = _targetLTV;
-        s_minLTV = _minLTV;
-        s_maxLTV = _maxLTV;
-    }
-
-    /// @notice Uniswap V3 callback fn, called back on pool.mint
-    function uniswapV3MintCallback(
-        uint256 amount0Owed,
-        uint256 amount1Owed,
-        bytes calldata /*_data*/
-    ) external override {
-        if (msg.sender != address(i_uniswapPool)) {
-            revert ChamberV1__CallerIsNotUniPool();
-        }
-
-        if (amount0Owed > 0)
-            TransferHelper.safeTransfer(
-                i_wmaticAddress,
-                msg.sender,
-                amount0Owed
-            );
-        if (amount1Owed > 0)
-            TransferHelper.safeTransfer(i_wethAddress, msg.sender, amount1Owed);
+        unlocked = true;
     }
 
     // =================================
-    // Main funciton
+    // Main funcitons
     // =================================
 
-    function mint(uint256 usdAmount) external {
+    function mint(uint256 usdAmount) external lock {
         {
             uint256 currUsdBalance = currentUSDBalance();
-            uint256 sharesToMint = (currUsdBalance != 0)
+            uint256 sharesToMint = (currUsdBalance > 10)
                 ? ((usdAmount * s_totalShares) / (currUsdBalance))
                 : usdAmount;
             s_totalShares += sharesToMint;
@@ -150,6 +144,79 @@ contract ChamberV1 is IUniswapV3MintCallback {
         _mint(usdAmount);
     }
 
+    function burn(uint256 _shares) external lock {
+        uint256 usdcBalanceBefore = TransferHelper.safeGetBalance(
+            i_usdcAddress,
+            address(this)
+        );
+        _burn(_shares);
+
+        s_totalShares -= _shares;
+        s_userShares[msg.sender] -= _shares;
+
+        TransferHelper.safeTransfer(
+            i_usdcAddress,
+            msg.sender,
+            TransferHelper.safeGetBalance(i_usdcAddress, address(this)) -
+                usdcBalanceBefore
+        );
+    }
+
+    function checkUpkeep(
+        bytes memory /* checkData */
+    )
+        public
+        view
+        override
+        returns (bool upkeepNeeded, bytes memory /* performData */)
+    {
+        uint256 _currentLTV = currentLTV();
+        (uint256 wmaticPool, uint256 wethPool) = calculateCurrentPoolReserves();
+        uint256 wmaticBorrowed = getVWMATICTokenBalance();
+        uint256 wethBorrowed = getVWETHTokenBalance();
+        bool tooMuchExposureTakenWeth;
+        bool tooMuchExposureTakenWMatic;
+        if (wmaticPool == 0 || wethPool == 0) {
+            tooMuchExposureTakenWeth = true;
+            tooMuchExposureTakenWMatic = true;
+        } else {
+            tooMuchExposureTakenWeth = (wethBorrowed > wethPool)
+                ? (((wethBorrowed - wethPool) * PRECISION) / wethPool >
+                    s_hedgeDev)
+                : (
+                    (((wethPool - wethBorrowed) * PRECISION) / wethPool >
+                        s_hedgeDev)
+                );
+            tooMuchExposureTakenWMatic = (wmaticBorrowed > wmaticPool)
+                ? (((wmaticBorrowed - wmaticPool) * PRECISION) / wmaticPool >
+                    s_hedgeDev)
+                : (
+                    (((wmaticPool - wmaticBorrowed) * PRECISION) / wmaticPool >
+                        s_hedgeDev)
+                );
+        }
+        upkeepNeeded =
+            (_currentLTV >= s_maxLTV ||
+                _currentLTV <= s_minLTV ||
+                tooMuchExposureTakenWeth ||
+                tooMuchExposureTakenWMatic) &&
+            (s_totalShares != 0);
+        return (upkeepNeeded, "0x0");
+    }
+
+    function performUpkeep(bytes calldata /* performData */) external override {
+        (bool upkeepNeeded, ) = checkUpkeep("");
+        // require(upkeepNeeded, "Upkeep not needed");
+        if (!upkeepNeeded) {
+            revert ChamberV1__UpkeepNotNeeded(currentLTV(), s_totalShares);
+        }
+        rebalance();
+    }
+
+    // =================================
+    // Main funcitons helpers
+    // =================================
+
     function _mint(uint256 usdAmount) internal {
         uint256 amount0;
         uint256 amount1;
@@ -160,19 +227,15 @@ contract ChamberV1 is IUniswapV3MintCallback {
         if (!s_liquidityTokenId) {
             s_lowerTick = ((currentTick - 700) / 10) * 10;
             s_upperTick = ((currentTick + 700) / 10) * 10;
-            (amount0, amount1) = calculatePoolReserves(
-                currentTick,
-                uint128(1e18)
-            );
             usedLTV = s_targetLTV;
             s_liquidityTokenId = true;
         } else {
             usedLTV = currentLTV();
-            (amount0, amount1) = calculatePoolReserves(
-                currentTick,
-                getLiquidity()
-            );
         }
+        if (usedLTV < (10 * PRECISION) / 100) {
+            usedLTV = s_targetLTV;
+        }
+        (amount0, amount1) = calculatePoolReserves(uint128(1e18));
 
         i_aaveV3Pool.supply(
             i_usdcAddress,
@@ -201,15 +264,25 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 1e12) /
             PRECISION;
 
-        i_aaveV3Pool.borrow(
-            i_wmaticAddress,
-            wmaticToBorrow,
-            2,
-            0,
-            address(this)
-        );
+        if (wmaticToBorrow > 0) {
+            i_aaveV3Pool.borrow(
+                i_wmaticAddress,
+                wmaticToBorrow,
+                2,
+                0,
+                address(this)
+            );
+        }
 
-        i_aaveV3Pool.borrow(i_wethAddress, wethToBorrow, 2, 0, address(this));
+        if (wethToBorrow > 0) {
+            i_aaveV3Pool.borrow(
+                i_wethAddress,
+                wethToBorrow,
+                2,
+                0,
+                address(this)
+            );
+        }
 
         {
             uint256 wmaticRecieved = TransferHelper.safeGetBalance(
@@ -238,34 +311,10 @@ contract ChamberV1 is IUniswapV3MintCallback {
         }
     }
 
-    function burn(uint256 _shares) external {
-        uint256 usdcBalanceBefore = TransferHelper.safeGetBalance(
-            i_usdcAddress,
-            address(this)
-        );
-        _burn(_shares);
-
-        s_totalShares -= _shares;
-        s_userShares[msg.sender] -= _shares;
-
-        TransferHelper.safeTransfer(
-            i_usdcAddress,
-            msg.sender,
-            TransferHelper.safeGetBalance(i_usdcAddress, address(this)) -
-                usdcBalanceBefore
-        );
-    }
-
     function _burn(uint256 _shares) internal {
-        (
-            uint256 burnWMATIC,
-            uint256 burnWETH,
-            uint256 feeWMATIC,
-            uint256 feeWETH
-        ) = _withdraw(
-                uint128((getPositionLiquidity() * _shares) / s_totalShares),
-                _shares
-            );
+        (uint256 burnWMATIC, uint256 burnWETH) = _withdraw(
+            uint128((getLiquidity() * _shares) / s_totalShares)
+        );
 
         uint256 amountWmatic = burnWMATIC +
             ((TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) -
@@ -289,6 +338,16 @@ contract ChamberV1 is IUniswapV3MintCallback {
             }
         }
     }
+
+    function rebalance() private {
+        s_liquidityTokenId = false;
+        _burn(s_totalShares);
+        _mint(TransferHelper.safeGetBalance(i_usdcAddress, address(this)));
+    }
+
+    // =================================
+    // Internal funcitons
+    // =================================
 
     function _repayAndWithdraw(
         uint256 _shares,
@@ -330,34 +389,25 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 wmaticDebtToCover
             ) {
                 revert ChamberV1__SwappedWethForWmaticStillCantRepay();
-            } else {
-                i_aaveV3Pool.repay(
-                    i_wmaticAddress,
-                    wmaticDebtToCover,
-                    2,
-                    address(this)
-                );
-                // no dust should be remaining
-                // uint256 wmaticUserRemainder = wmaticOwnedByUser +
-                //     IERC20(i_wmaticAddress).balanceOf(address(this)) -
-                //     wmaticBalanceBefore -
-                //     wmaticDebtToCover;
             }
-        } else {
-            i_aaveV3Pool.repay(
-                i_wmaticAddress,
-                wmaticDebtToCover,
-                2,
-                address(this)
-            );
         }
-        wmaticRemainder = TransferHelper.safeGetBalance(
+        i_aaveV3Pool.repay(
             i_wmaticAddress,
+            wmaticDebtToCover,
+            2,
             address(this)
-        ) > wmaticBalanceBefore
-            ? TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) -
-                wmaticBalanceBefore
-            : 0;
+        );
+        if (
+            TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) >=
+            wmaticBalanceBefore - wmaticOwnedByUser
+        ) {
+            wmaticRemainder =
+                TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) +
+                wmaticOwnedByUser -
+                wmaticBalanceBefore;
+        } else {
+            revert ChamberV1__UserRepaidMoreMaticThanOwned();
+        }
 
         i_aaveV3Pool.withdraw(
             i_usdcAddress,
@@ -381,34 +431,21 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 wethDebtToCover
             ) {
                 revert ChamberV1__SwappedUsdcForWethStillCantRepay();
-            } else {
-                i_aaveV3Pool.repay(
-                    i_wethAddress,
-                    wethDebtToCover,
-                    2,
-                    address(this)
-                );
-                // no dust should be remaining
-                // uint256 wmaticUserRemainder = wmaticOwnedByUser +
-                //     IERC20(i_wmaticAddress).balanceOf(address(this)) -
-                //     wmaticBalanceBefore -
-                //     wmaticDebtToCover;
             }
-        } else {
-            i_aaveV3Pool.repay(
-                i_wethAddress,
-                wethDebtToCover,
-                2,
-                address(this)
-            );
         }
-        wethRemainder = TransferHelper.safeGetBalance(
-            i_wethAddress,
-            address(this)
-        ) > wethBalanceBefore
-            ? TransferHelper.safeGetBalance(i_wethAddress, address(this)) -
-                wethBalanceBefore
-            : 0;
+        i_aaveV3Pool.repay(i_wethAddress, wethDebtToCover, 2, address(this));
+
+        if (
+            TransferHelper.safeGetBalance(i_wethAddress, address(this)) >=
+            wethBalanceBefore - wethOwnedByUser
+        ) {
+            wethRemainder =
+                TransferHelper.safeGetBalance(i_wethAddress, address(this)) +
+                wethOwnedByUser -
+                wethBalanceBefore;
+        } else {
+            revert ChamberV1__UserRepaidMoreEthThanOwned();
+        }
 
         i_aaveV3Pool.withdraw(
             i_usdcAddress,
@@ -427,29 +464,6 @@ contract ChamberV1 is IUniswapV3MintCallback {
         uint256 amountOut = i_uniswapSwapRouter.exactInput(
             ISwapRouter.ExactInputParams({
                 path: abi.encodePacked(assetIn, uint24(500), i_usdcAddress),
-                recipient: address(this),
-                deadline: block.timestamp,
-                amountIn: amountIn,
-                amountOutMinimum: 0
-            })
-        );
-        return (amountOut);
-    }
-
-    function swapExactAssetToAsset(
-        address assetIn,
-        address assetOut,
-        uint256 amountIn
-    ) internal returns (uint256) {
-        uint256 amountOut = i_uniswapSwapRouter.exactInput(
-            ISwapRouter.ExactInputParams({
-                path: abi.encodePacked(
-                    assetIn,
-                    uint24(500),
-                    i_usdcAddress,
-                    uint24(500),
-                    assetOut
-                ),
                 recipient: address(this),
                 deadline: block.timestamp,
                 amountIn: amountIn,
@@ -500,18 +514,8 @@ contract ChamberV1 is IUniswapV3MintCallback {
     }
 
     function _withdraw(
-        uint128 liquidityToBurn,
-        uint256 _shares
-    ) internal returns (uint256, uint256, uint256, uint256) {
-        uint256 preBalanceWMATIC = TransferHelper.safeGetBalance(
-            i_wmaticAddress,
-            address(this)
-        );
-        uint256 preBalanceWETH = TransferHelper.safeGetBalance(
-            i_wethAddress,
-            address(this)
-        );
-
+        uint128 liquidityToBurn
+    ) internal returns (uint256, uint256) {
         (uint256 burnWMATIC, uint256 burnWETH) = i_uniswapPool.burn(
             s_lowerTick,
             s_upperTick,
@@ -526,32 +530,9 @@ contract ChamberV1 is IUniswapV3MintCallback {
             type(uint128).max,
             type(uint128).max
         );
-        uint256 feeWMATIC = ((TransferHelper.safeGetBalance(
-            i_wmaticAddress,
-            address(this)
-        ) -
-            preBalanceWMATIC -
-            burnWMATIC) * _shares) / s_totalShares;
-        uint256 feeWETH = ((TransferHelper.safeGetBalance(
-            i_wethAddress,
-            address(this)
-        ) -
-            preBalanceWETH -
-            burnWETH) * _shares) / s_totalShares;
 
-        return (burnWMATIC, burnWETH, feeWMATIC, feeWETH);
+        return (burnWMATIC, burnWETH);
     }
-
-    function rebalance() public {
-        _burn(s_totalShares);
-        _mint(TransferHelper.safeGetBalance(i_usdcAddress, address(this)));
-    }
-
-    // =================================
-    // FallBack
-    // =================================
-
-    receive() external payable {}
 
     // =================================
     // View funcitons
@@ -597,7 +578,10 @@ contract ChamberV1 is IUniswapV3MintCallback {
             ,
 
         ) = i_aaveV3Pool.getUserAccountData(address(this));
-        return (PRECISION * totalBorrowedETH) / totalCollateralETH;
+        uint256 ltv = totalCollateralETH == 0
+            ? 0
+            : (PRECISION * totalBorrowedETH) / totalCollateralETH;
+        return ltv;
     }
 
     function sharesWorth(uint256 shares) public view returns (uint256) {
@@ -633,21 +617,29 @@ contract ChamberV1 is IUniswapV3MintCallback {
         return sqrtRatioX96;
     }
 
+    function calculatePoolReserves(
+        uint128 liquidity
+    ) internal view returns (uint256, uint256) {
+        uint256 amount0;
+        uint256 amount1;
+        (amount0, amount1) = LiquidityAmounts.getAmountsForLiquidity(
+            getSqrtRatioX96(),
+            MathHelper.getSqrtRatioAtTick(s_lowerTick),
+            MathHelper.getSqrtRatioAtTick(s_upperTick),
+            liquidity
+        );
+        return (amount0, amount1);
+    }
+
     function calculateCurrentPoolReserves()
         public
         view
-        returns (uint256 amount0Current, uint256 amount1Current)
+        returns (uint256, uint256)
     {
-        (
-            uint128 liquidity,
-            uint256 feeGrowthInside0Last,
-            uint256 feeGrowthInside1Last,
-            uint128 tokensOwed0,
-            uint128 tokensOwed1
-        ) = i_uniswapPool.positions(_getPositionID());
+        uint128 liquidity = getLiquidity();
 
         // compute current holdings from liquidity
-        (amount0Current, amount1Current) = LiquidityAmounts
+        (uint256 amount0Current, uint256 amount1Current) = LiquidityAmounts
             .getAmountsForLiquidity(
                 getSqrtRatioX96(),
                 MathHelper.getSqrtRatioAtTick(s_lowerTick),
@@ -668,7 +660,7 @@ contract ChamberV1 is IUniswapV3MintCallback {
         view
         returns (uint256 fee0, uint256 fee1)
     {
-        (, int24 tick, , , , , ) = i_uniswapPool.slot0();
+        int24 tick = getTick();
         (
             uint128 liquidity,
             uint256 feeGrowthInside0Last,
@@ -759,31 +751,49 @@ contract ChamberV1 is IUniswapV3MintCallback {
                 )) / 1e27;
     }
 
-    function getPositionLiquidity() public view returns (uint128) {
-        (uint128 liquidity, , , , ) = i_uniswapPool.positions(_getPositionID());
-        return liquidity;
-    }
-
-    function calculatePoolReserves(
-        int24 _currentTick,
-        uint128 liquidity
-    ) internal view returns (uint256, uint256) {
-        uint256 amount0;
-        uint256 amount1;
-        (amount0, amount1) = LiquidityAmounts.getAmountsForLiquidity(
-            MathHelper.getSqrtRatioAtTick(_currentTick),
-            MathHelper.getSqrtRatioAtTick(s_lowerTick),
-            MathHelper.getSqrtRatioAtTick(s_upperTick),
-            liquidity
-        );
-        return (amount0, amount1);
-    }
-
     // =================================
-    // Temporary solution for testing
+    // Callbacks
     // =================================
 
-    function giveApprove(address _token, address _to) public {
+    /// @notice Uniswap V3 callback fn, called back on pool.mint
+    function uniswapV3MintCallback(
+        uint256 amount0Owed,
+        uint256 amount1Owed,
+        bytes calldata /*_data*/
+    ) external override {
+        if (msg.sender != address(i_uniswapPool)) {
+            revert ChamberV1__CallerIsNotUniPool();
+        }
+
+        if (amount0Owed > 0)
+            TransferHelper.safeTransfer(
+                i_wmaticAddress,
+                msg.sender,
+                amount0Owed
+            );
+        if (amount1Owed > 0)
+            TransferHelper.safeTransfer(i_wethAddress, msg.sender, amount1Owed);
+    }
+
+    receive() external payable {}
+
+    // =================================
+    // Admin functions
+    // =================================
+
+    function giveApprove(address _token, address _to) public onlyOwner {
         TransferHelper.safeApprove(_token, _to, type(uint256).max);
+    }
+
+    function setLTV(
+        uint256 _targetLTV,
+        uint256 _minLTV,
+        uint256 _maxLTV,
+        uint256 _hedgeDev
+    ) public onlyOwner {
+        s_targetLTV = _targetLTV;
+        s_minLTV = _minLTV;
+        s_maxLTV = _maxLTV;
+        s_hedgeDev = _hedgeDev;
     }
 }

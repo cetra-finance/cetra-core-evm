@@ -25,7 +25,7 @@ module.exports = {
             chainId: 31337,
            forking: {
                 url: CUSTOM_RPC_URL,
-                blockNumber: 39125478
+                blockNumber: 39126878
            }
         }
     },
@@ -48,7 +48,10 @@ module.exports = {
             },
             {
             version: "0.8.10",
-            }
+            },
+            {
+            version: "0.4.18",
+            },
         ],
         settings: {
            optimizer: {
