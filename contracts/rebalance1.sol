@@ -225,8 +225,8 @@ contract ChamberV1 is
         int24 currentTick = getTick();
 
         if (!s_liquidityTokenId) {
-            s_lowerTick = ((currentTick - 700) / 10) * 10;
-            s_upperTick = ((currentTick + 700) / 10) * 10;
+            s_lowerTick = ((currentTick - 11000) / 10) * 10;
+            s_upperTick = ((currentTick + 11000) / 10) * 10;
             usedLTV = s_targetLTV;
             s_liquidityTokenId = true;
         } else {
