@@ -30,14 +30,6 @@ module.exports = async () => {
         "WMATIC",
         currNetworkConfig.wmaticAddress
     );
-    let aaveOracle = await ethers.getContractAt(
-        "IAaveOracle",
-        currNetworkConfig.aaveOracleAddress
-    );
-    let UniRouter = await ethers.getContractAt(
-        "ISwapRouter",
-        networkConfig[network.config.chainId].uniswapRouterAddress
-    );
 
     console.log("----------------------------------------------------")
     const Rebalance = await ethers.getContractFactory("ChamberV1");
@@ -78,7 +70,7 @@ module.exports = async () => {
         );
 
     console.log(`You have deployed an contract to ${rebalance.address}`)
-    console.log(`Verify with:\n npx hardhat verify --network bnb ${rebalance.address} ${args.toString().replace(/,/g, " ")}`);
+    console.log(`Verify with:\n npx hardhat verify --network matic ${rebalance.address} ${args.toString().replace(/,/g, " ")}`);
 
     console.log('done')
 }
