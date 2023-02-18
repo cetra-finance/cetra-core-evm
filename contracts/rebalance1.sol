@@ -210,7 +210,6 @@ contract ChamberV1 is
 
     function performUpkeep(bytes calldata /* performData */) external override {
         (bool upkeepNeeded, ) = checkUpkeep("");
-        // require(upkeepNeeded, "Upkeep not needed");
         if (!upkeepNeeded) {
             revert ChamberV1__UpkeepNotNeeded(currentLTV(), s_totalShares);
         }
@@ -229,10 +228,8 @@ contract ChamberV1 is
         int24 currentTick = getTick();
 
         if (!s_liquidityTokenId) {
-            // s_lowerTick = ((currentTick - 11000) / 10) * 10;
-            // s_upperTick = ((currentTick + 11000) / 10) * 10;
-            s_lowerTick = ((currentTick - 700) / 10) * 10;
-            s_upperTick = ((currentTick + 700) / 10) * 10;
+            s_lowerTick = ((currentTick - 11000) / 10) * 10;
+            s_upperTick = ((currentTick + 11000) / 10) * 10;
             usedLTV = s_targetLTV;
             s_liquidityTokenId = true;
         } else {
@@ -843,4 +840,5 @@ contract ChamberV1 is
         s_maxLTV = _maxLTV;
         s_hedgeDev = _hedgeDev;
     }
+
 }
