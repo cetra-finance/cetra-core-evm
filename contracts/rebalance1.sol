@@ -229,8 +229,10 @@ contract ChamberV1 is
         int24 currentTick = getTick();
 
         if (!s_liquidityTokenId) {
-            s_lowerTick = ((currentTick - 11000) / 10) * 10;
-            s_upperTick = ((currentTick + 11000) / 10) * 10;
+            // s_lowerTick = ((currentTick - 11000) / 10) * 10;
+            // s_upperTick = ((currentTick + 11000) / 10) * 10;
+            s_lowerTick = ((currentTick - 700) / 10) * 10;
+            s_upperTick = ((currentTick + 700) / 10) * 10;
             usedLTV = s_targetLTV;
             s_liquidityTokenId = true;
         } else {
@@ -292,11 +294,11 @@ contract ChamberV1 is
             uint256 wmaticRecieved = TransferHelper.safeGetBalance(
                 i_wmaticAddress,
                 address(this)
-            );
+            ) - s_cetraFeeWmatic;
             uint256 wethRecieved = TransferHelper.safeGetBalance(
                 i_wethAddress,
                 address(this)
-            );
+            ) - s_cetraFeeWeth;
             uint128 liquidityMinted = LiquidityAmounts.getLiquidityForAmounts(
                 getSqrtRatioX96(),
                 MathHelper.getSqrtRatioAtTick(s_lowerTick),
