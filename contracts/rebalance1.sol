@@ -587,11 +587,13 @@ contract ChamberV1 is
             TransferHelper.safeGetBalance(i_usdcAddress, address(this));
         uint256 poolTokensValue = ((wethPoolBalance +
             wethFeePending +
-            TransferHelper.safeGetBalance(i_wethAddress, address(this))) *
+            TransferHelper.safeGetBalance(i_wethAddress, address(this)) -
+            s_cetraFeeWeth) *
             getWethOraclePrice() +
             (wmaticPoolBalance +
                 wmaticFeePending +
-                TransferHelper.safeGetBalance(i_wmaticAddress, address(this))) *
+                TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) -
+                s_cetraFeeWmatic) *
             getWmaticOraclePrice()) /
             getUsdcOraclePrice() /
             1e12;
