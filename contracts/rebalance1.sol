@@ -63,6 +63,10 @@ contract ChamberV1 is
     uint256 private s_maxLTV;
     uint256 private s_hedgeDev;
 
+    uint256 private s_cetraFeeWmatic;
+    uint256 private s_cetraFeeWeth;
+    uint256 private s_cetraFeeUsdc;
+
     address private immutable i_usdcAddress;
     address private immutable i_wethAddress;
     address private immutable i_wmaticAddress;
@@ -79,6 +83,7 @@ contract ChamberV1 is
     IUniswapV3Pool private immutable i_uniswapPool;
 
     uint256 private constant PRECISION = 1e18;
+    uint256 private constant CETRA_FEE = 5 * 1e16;
 
     // ================================
     // Modifiers
@@ -117,6 +122,9 @@ contract ChamberV1 is
         i_wethAddress = i_aaveVWETHToken.UNDERLYING_ASSET_ADDRESS();
         i_wmaticAddress = i_aaveVWMATICToken.UNDERLYING_ASSET_ADDRESS();
         unlocked = true;
+        s_cetraFeeWmatic = 0;
+        s_cetraFeeWeth = 0;
+        s_cetraFeeUsdc = 0;
     }
 
     // =================================
@@ -217,7 +225,7 @@ contract ChamberV1 is
     // Main funcitons helpers
     // =================================
 
-    function _mint(uint256 usdAmount) internal {
+    function _mint(uint256 usdAmount) private {
         uint256 amount0;
         uint256 amount1;
         uint256 usedLTV;
@@ -311,18 +319,24 @@ contract ChamberV1 is
         }
     }
 
-    function _burn(uint256 _shares) internal {
-        (uint256 burnWMATIC, uint256 burnWETH) = _withdraw(
-            uint128((getLiquidity() * _shares) / s_totalShares)
-        );
+    function _burn(uint256 _shares) private {
+        (
+            uint256 burnWMATIC,
+            uint256 burnWETH,
+            uint256 feeWmatic,
+            uint256 feeWeth
+        ) = _withdraw(uint128((getLiquidity() * _shares) / s_totalShares));
+        _applyFees(feeWmatic, feeWeth);
 
         uint256 amountWmatic = burnWMATIC +
             ((TransferHelper.safeGetBalance(i_wmaticAddress, address(this)) -
-                burnWMATIC) * _shares) /
+                burnWMATIC -
+                s_cetraFeeWmatic) * _shares) /
             s_totalShares;
         uint256 amountWeth = burnWETH +
             ((TransferHelper.safeGetBalance(i_wethAddress, address(this)) -
-                burnWETH) * _shares) /
+                burnWETH -
+                s_cetraFeeWeth) * _shares) /
             s_totalShares;
 
         {
@@ -346,14 +360,14 @@ contract ChamberV1 is
     }
 
     // =================================
-    // Internal funcitons
+    // Private funcitons
     // =================================
 
     function _repayAndWithdraw(
         uint256 _shares,
         uint256 wmaticOwnedByUser,
         uint256 wethOwnedByUser
-    ) internal returns (uint256, uint256) {
+    ) private returns (uint256, uint256) {
         uint256 wmaticDebtToCover = (getVWMATICTokenBalance() * _shares) /
             s_totalShares;
         uint256 wethDebtToCover = (getVWETHTokenBalance() * _shares) /
@@ -460,7 +474,7 @@ contract ChamberV1 is
     function swapExactAssetToStable(
         address assetIn,
         uint256 amountIn
-    ) internal returns (uint256) {
+    ) private returns (uint256) {
         uint256 amountOut = i_uniswapSwapRouter.exactInput(
             ISwapRouter.ExactInputParams({
                 path: abi.encodePacked(assetIn, uint24(500), i_usdcAddress),
@@ -476,7 +490,7 @@ contract ChamberV1 is
     function swapStableToExactAsset(
         address assetOut,
         uint256 amountOut
-    ) internal returns (uint256) {
+    ) private returns (uint256) {
         uint256 amountIn = i_uniswapSwapRouter.exactOutput(
             ISwapRouter.ExactOutputParams({
                 path: abi.encodePacked(assetOut, uint24(500), i_usdcAddress),
@@ -493,7 +507,7 @@ contract ChamberV1 is
         address assetIn,
         address assetOut,
         uint256 amountOut
-    ) internal returns (uint256) {
+    ) private returns (uint256) {
         uint256 amountIn = i_uniswapSwapRouter.exactOutput(
             ISwapRouter.ExactOutputParams({
                 path: abi.encodePacked(
@@ -515,14 +529,20 @@ contract ChamberV1 is
 
     function _withdraw(
         uint128 liquidityToBurn
-    ) internal returns (uint256, uint256) {
-        (uint256 burnWMATIC, uint256 burnWETH) = i_uniswapPool.burn(
+    ) private returns (uint256, uint256, uint256, uint256) {
+        (uint256 burnWmatic, uint256 burnWeth) = i_uniswapPool.burn(
             s_lowerTick,
             s_upperTick,
             liquidityToBurn
         );
-        // maybe should make function "collectAndReinvest" to call it before withdraws.
-        // And although make it available for harvesters to reinvest for fee
+        uint256 preBalanceWmatic = TransferHelper.safeGetBalance(
+            i_wmaticAddress,
+            address(this)
+        );
+        uint256 preBalanceWeth = TransferHelper.safeGetBalance(
+            i_wethAddress,
+            address(this)
+        );
         i_uniswapPool.collect(
             address(this),
             s_lowerTick,
@@ -530,13 +550,38 @@ contract ChamberV1 is
             type(uint128).max,
             type(uint128).max
         );
+        uint256 feeWmatic = TransferHelper.safeGetBalance(
+            i_wmaticAddress,
+            address(this)
+        ) -
+            preBalanceWmatic -
+            burnWmatic;
+        uint256 feeWeth = TransferHelper.safeGetBalance(
+            i_wethAddress,
+            address(this)
+        ) -
+            preBalanceWeth -
+            burnWeth;
+        return (burnWmatic, burnWeth, feeWmatic, feeWeth);
+    }
 
-        return (burnWMATIC, burnWETH);
+    function _applyFees(uint256 _feeWmatic, uint256 _feeWeth) private {
+        s_cetraFeeWeth += (_feeWeth * CETRA_FEE) / PRECISION;
+        s_cetraFeeWmatic += (_feeWmatic * CETRA_FEE) / PRECISION;
+    }
+
+    function _redeemFees() public onlyOwner {
+        TransferHelper.safeTransfer(i_wmaticAddress, owner(), s_cetraFeeWmatic);
+        TransferHelper.safeTransfer(i_wethAddress, owner(), s_cetraFeeWeth);
     }
 
     // =================================
     // View funcitons
     // =================================
+
+    function getAdminBalance() public view returns (uint256, uint256) {
+        return (s_cetraFeeWmatic, s_cetraFeeWeth);
+    }
 
     function currentUSDBalance() public view returns (uint256) {
         (
@@ -605,21 +650,21 @@ contract ChamberV1 is
         return (i_aaveOracle.getAssetPrice(i_wmaticAddress) * 1e10);
     }
 
-    function _getPositionID() internal view returns (bytes32 positionID) {
+    function _getPositionID() private view returns (bytes32 positionID) {
         return
             keccak256(
                 abi.encodePacked(address(this), s_lowerTick, s_upperTick)
             );
     }
 
-    function getSqrtRatioX96() public view returns (uint160) {
+    function getSqrtRatioX96() private view returns (uint160) {
         (uint160 sqrtRatioX96, , , , , , ) = i_uniswapPool.slot0();
         return sqrtRatioX96;
     }
 
     function calculatePoolReserves(
         uint128 liquidity
-    ) internal view returns (uint256, uint256) {
+    ) private view returns (uint256, uint256) {
         uint256 amount0;
         uint256 amount1;
         (amount0, amount1) = LiquidityAmounts.getAmountsForLiquidity(
@@ -650,7 +695,7 @@ contract ChamberV1 is
         return (amount0Current, amount1Current);
     }
 
-    function getLiquidity() internal view returns (uint128) {
+    function getLiquidity() private view returns (uint128) {
         (uint128 liquidity, , , , ) = i_uniswapPool.positions(_getPositionID());
         return liquidity;
     }
