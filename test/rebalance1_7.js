@@ -503,6 +503,18 @@ describe("maticToEthPriceFall", function () {
         });
     });
 
+    describe("Owner withdraw fees | first circuit", async function () {
+        it("owner withdraws fees", async function () {
+            await chamber.connect(owner)._redeemFees();
+        })
+    })
+
+    describe("checks 4 | first circuit", async function () {
+        it("makes all checks", async function () {
+            await makeAllChecks();
+        });
+    });
+
     describe("every user mints | second circuit", async function () {
         it("owner mints 1000$", async function () {
             await makeDeposit(owner, 1000 * 1e6);
@@ -649,6 +661,18 @@ describe("maticToEthPriceFall", function () {
     });
 
     describe("checks 3 | second circuit", async function () {
+        it("makes all checks", async function () {
+            await makeAllChecks();
+        });
+    });
+
+    describe("Owner withdraw fees | second circuit", async function () {
+        it("owner withdraws fees", async function () {
+            await chamber.connect(owner)._redeemFees();
+        })
+    })
+
+    describe("checks 4 | second circuit", async function () {
         it("makes all checks", async function () {
             await makeAllChecks();
         });

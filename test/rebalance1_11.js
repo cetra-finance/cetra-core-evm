@@ -562,4 +562,16 @@ describe("Basic tests new", function () {
             await makeAllChecks();
         })
     })
+
+    describe("Owner withdraw fees", async function () {
+        it("owner withdraws fees", async function () {
+            await chamber.connect(owner)._redeemFees();
+        })
+    })
+
+    describe("checks 5", async function () {
+        it("makes all checks", async function () {
+            await makeAllChecks();
+        });
+    });
 });

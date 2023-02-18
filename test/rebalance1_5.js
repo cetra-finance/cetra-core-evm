@@ -493,4 +493,16 @@ describe("maticToEthPriceRise", function () {
             await makeAllChecks();
         });
     });
+
+    describe("Owner withdraw fees", async function () {
+        it("owner withdraws fees", async function () {
+            await chamber.connect(owner)._redeemFees();
+        })
+    })
+
+    describe("checks 4", async function () {
+        it("makes all checks", async function () {
+            await makeAllChecks();
+        });
+    });
 });
