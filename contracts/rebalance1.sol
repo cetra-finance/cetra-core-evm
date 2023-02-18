@@ -122,9 +122,6 @@ contract ChamberV1 is
         i_wethAddress = i_aaveVWETHToken.UNDERLYING_ASSET_ADDRESS();
         i_wmaticAddress = i_aaveVWMATICToken.UNDERLYING_ASSET_ADDRESS();
         unlocked = true;
-        s_cetraFeeWmatic = 0;
-        s_cetraFeeWeth = 0;
-        s_cetraFeeUsdc = 0;
     }
 
     // =================================
@@ -570,11 +567,6 @@ contract ChamberV1 is
         s_cetraFeeWmatic += (_feeWmatic * CETRA_FEE) / PRECISION;
     }
 
-    function _redeemFees() public onlyOwner {
-        TransferHelper.safeTransfer(i_wmaticAddress, owner(), s_cetraFeeWmatic);
-        TransferHelper.safeTransfer(i_wethAddress, owner(), s_cetraFeeWeth);
-    }
-
     // =================================
     // View funcitons
     // =================================
@@ -825,6 +817,11 @@ contract ChamberV1 is
     // =================================
     // Admin functions
     // =================================
+
+    function _redeemFees() public onlyOwner {
+        TransferHelper.safeTransfer(i_wmaticAddress, owner(), s_cetraFeeWmatic);
+        TransferHelper.safeTransfer(i_wethAddress, owner(), s_cetraFeeWeth);
+    }
 
     function giveApprove(address _token, address _to) public onlyOwner {
         TransferHelper.safeApprove(_token, _to, type(uint256).max);
