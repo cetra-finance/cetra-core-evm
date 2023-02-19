@@ -27,6 +27,11 @@ module.exports = {
                 url: CUSTOM_RPC_URL,
                 blockNumber: 39126878
            }
+        },
+        matic: {
+            chainId:137,
+            url: CUSTOM_RPC_URL,
+            accounts: [PRIVATE_KEY],
         }
     },
     etherscan: {

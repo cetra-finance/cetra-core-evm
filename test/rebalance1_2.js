@@ -316,6 +316,10 @@ describe("Basic tests new", function () {
             (await wmatic.balanceOf(chamber.address)).toString()
         );
 
+        console.log(
+            "Owner fees:", (await chamber.getAdminBalance()).toString(),
+        )
+
         console.log("TOKENS IN UNI POSITION:");
         console.log((await chamber.calculateCurrentPoolReserves()).toString());
         console.log("TOKENS IN AAVE POSITION");
@@ -591,6 +595,18 @@ describe("Basic tests new", function () {
     });
 
     describe("checks 3", async function () {
+        it("makes all checks", async function () {
+            await makeAllChecks();
+        });
+    });
+
+    describe("Owner withdraw fees", async function () {
+        it("owner withdraws fees", async function () {
+            await chamber.connect(owner)._redeemFees();
+        })
+    })
+
+    describe("checks 4", async function () {
         it("makes all checks", async function () {
             await makeAllChecks();
         });
