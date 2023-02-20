@@ -26,10 +26,10 @@ error ChamberV1__AaveDepositError();
 error ChamberV1__UserRepaidMoreEthThanOwned();
 error ChamberV1__UserRepaidMoreMaticThanOwned();
 error ChamberV1__SwappedWethForWmaticStillCantRepay();
-error ChamberV1__SwappedWmaticForWethStillCantRepay();
 error ChamberV1__SwappedUsdcForWethStillCantRepay();
 error ChamberV1__CallerIsNotUniPool();
 error ChamberV1__sharesWorthMoreThenDep();
+error ChamberV1__TicksOut();
 error ChamberV1__UpkeepNotNeeded(uint256 _currentLTV, uint256 _totalShares);
 
 contract ChamberV1 is
@@ -228,8 +228,8 @@ contract ChamberV1 is
         int24 currentTick = getTick();
 
         if (!s_liquidityTokenId) {
-            s_lowerTick = ((currentTick - 11000) / 10) * 10;
-            s_upperTick = ((currentTick + 11000) / 10) * 10;
+            s_lowerTick = ((currentTick - 700) / 10) * 10;
+            s_upperTick = ((currentTick + 700) / 10) * 10;
             usedLTV = s_targetLTV;
             s_liquidityTokenId = true;
         } else {
@@ -250,6 +250,10 @@ contract ChamberV1 is
         uint256 usdcOraclePrice = getUsdcOraclePrice();
         uint256 wmaticOraclePrice = getWmaticOraclePrice();
         uint256 wethOraclePrice = getWethOraclePrice();
+
+        if (amount0 == 0 || amount1 == 0) {
+            revert ChamberV1__TicksOut();
+        }
 
         uint256 wethToBorrow = (usdAmount * usdcOraclePrice * usedLTV) /
             ((wmaticOraclePrice * amount0) /
@@ -418,12 +422,14 @@ contract ChamberV1 is
             revert ChamberV1__UserRepaidMoreMaticThanOwned();
         }
 
+        console.log("Rebalance done");
         i_aaveV3Pool.withdraw(
             i_usdcAddress,
             (((1e6 * wmaticDebtToCover * getWmaticOraclePrice()) /
                 getUsdcOraclePrice()) / _currentLTV),
             address(this)
         );
+        console.log("Rebalance done");
 
         if (wethOwnedByUser < wethDebtToCover + wethSwapped) {
             usdcSwapped += swapStableToExactAsset(
@@ -442,6 +448,7 @@ contract ChamberV1 is
                 revert ChamberV1__SwappedUsdcForWethStillCantRepay();
             }
         }
+
         i_aaveV3Pool.repay(i_wethAddress, wethDebtToCover, 2, address(this));
 
         if (
@@ -621,7 +628,7 @@ contract ChamberV1 is
         return ltv;
     }
 
-    function sharesWorth(uint256 shares) public view returns (uint256) {
+    function sharesWorth(uint256 shares) private view returns (uint256) {
         return (currentUSDBalance() * shares) / s_totalShares;
     }
 
