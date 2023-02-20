@@ -8,7 +8,7 @@ const JSBI = require("jsbi");
 
 describe("Basic tests new", function () {
     let owner, _, user1, user2, donorWallet;
-    let usd, weth;
+    let usd, weth, aUSD, vMATIC, vWETH;
     let aaveOracle, UniRouter;
 
     // =================================
@@ -221,14 +221,14 @@ describe("Basic tests new", function () {
         console.log("TOKENS IN AAVE POSITION");
         console.log(
             "COLLATERAL TOKENS ($):",
-            (await chamber.getAUSDCTokenBalance()).toString()
+            (await aUSD.balanceOf(chamber.address)).toString()
         );
         console.log("DEBT TOKENS:");
         console.log(
             "DEPT IN MATIC:",
-            (await chamber.getVWMATICTokenBalance()).toString(),
+            (await vMATIC.balanceOf(chamber.address)).toString(),
             "\nDEPT IN WETH:",
-            (await chamber.getVWETHTokenBalance()).toString()
+            (await vWETH.balanceOf(chamber.address)).toString()
         );
         console.log("LTV IS:", (await chamber.currentLTV()).toString());
 
@@ -261,6 +261,18 @@ describe("Basic tests new", function () {
             "WMATIC",
             currNetworkConfig.wmaticAddress
         );
+        aUSD = await ethers.getContractAt(
+            "IERC20",
+            currNetworkConfig.aaveAUSDCAddress
+        )
+        vMATIC = await ethers.getContractAt(
+            "IERC20",
+            currNetworkConfig.aaveVWMATICAddress
+        )
+        vWETH = await ethers.getContractAt(
+            "IERC20",
+            currNetworkConfig.aaveVWETHAddress
+        )
         aaveOracle = await ethers.getContractAt(
             "IAaveOracle",
             currNetworkConfig.aaveOracleAddress

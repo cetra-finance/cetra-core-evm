@@ -8,7 +8,7 @@ const JSBI = require("jsbi");
 
 describe("Basic tests new", function () {
     let owner, _, user1, user2, donorWallet;
-    let usd, weth;
+    let usd, weth, aUSD, vMATIC, vWETH;
     let aaveOracle, UniRouter;
 
     // =================================
@@ -298,9 +298,18 @@ describe("Basic tests new", function () {
     const makeAllChecks = async () => {
         console.log("TOKENS LEFT IN CONTRACT");
         console.log("usd:", (await usd.balanceOf(chamber.address)).toString());
-        console.log("weth:", (await weth.balanceOf(chamber.address)).toString());
-        console.log("matic:", (await ethers.provider.getBalance(chamber.address)).toString());
-        console.log("wmatic:", (await wmatic.balanceOf(chamber.address)).toString());
+        console.log(
+            "weth:",
+            (await weth.balanceOf(chamber.address)).toString()
+        );
+        console.log(
+            "matic:",
+            (await ethers.provider.getBalance(chamber.address)).toString()
+        );
+        console.log(
+            "wmatic:",
+            (await wmatic.balanceOf(chamber.address)).toString()
+        );
 
         console.log(
             "Owner fees:", (await chamber.getAdminBalance()).toString(),
@@ -309,16 +318,24 @@ describe("Basic tests new", function () {
         console.log("TOKENS IN UNI POSITION:");
         console.log((await chamber.calculateCurrentPoolReserves()).toString());
         console.log("TOKENS IN AAVE POSITION");
-        console.log("COLLATERAL TOKENS ($):", (await chamber.getAUSDCTokenBalance()).toString());
+        console.log(
+            "COLLATERAL TOKENS ($):",
+            (await aUSD.balanceOf(chamber.address)).toString()
+        );
         console.log("DEBT TOKENS:");
         console.log(
-            "DEPT IN MATIC:", (await chamber.getVWMATICTokenBalance()).toString(),
-            "\nDEPT IN WETH:", (await chamber.getVWETHTokenBalance()).toString()
+            "DEPT IN MATIC:",
+            (await vMATIC.balanceOf(chamber.address)).toString(),
+            "\nDEPT IN WETH:",
+            (await vWETH.balanceOf(chamber.address)).toString()
         );
         console.log("LTV IS:", (await chamber.currentLTV()).toString());
 
-        console.log("TOTAL USD BALANCE:", (await chamber.currentUSDBalance()).toString());
-    }
+        console.log(
+            "TOTAL USD BALANCE:",
+            (await chamber.currentUSDBalance()).toString()
+        );
+    };
 
     // =================================
     // Main tests
@@ -343,6 +360,18 @@ describe("Basic tests new", function () {
             "WMATIC",
             currNetworkConfig.wmaticAddress
         );
+        aUSD = await ethers.getContractAt(
+            "IERC20",
+            currNetworkConfig.aaveAUSDCAddress
+        )
+        vMATIC = await ethers.getContractAt(
+            "IERC20",
+            currNetworkConfig.aaveVWMATICAddress
+        )
+        vWETH = await ethers.getContractAt(
+            "IERC20",
+            currNetworkConfig.aaveVWETHAddress
+        )
         aaveOracle = await ethers.getContractAt(
             "IAaveOracle",
             currNetworkConfig.aaveOracleAddress

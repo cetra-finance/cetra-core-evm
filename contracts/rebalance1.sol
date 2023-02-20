@@ -625,20 +625,20 @@ contract ChamberV1 is
         return (currentUSDBalance() * shares) / s_totalShares;
     }
 
-    function getTick() public view returns (int24) {
+    function getTick() private view returns (int24) {
         (, int24 tick, , , , , ) = i_uniswapPool.slot0();
         return tick;
     }
 
-    function getUsdcOraclePrice() public view returns (uint256) {
+    function getUsdcOraclePrice() private view returns (uint256) {
         return (i_aaveOracle.getAssetPrice(i_usdcAddress) * 1e10);
     }
 
-    function getWethOraclePrice() public view returns (uint256) {
+    function getWethOraclePrice() private view returns (uint256) {
         return (i_aaveOracle.getAssetPrice(i_wethAddress) * 1e10);
     }
 
-    function getWmaticOraclePrice() public view returns (uint256) {
+    function getWmaticOraclePrice() private view returns (uint256) {
         return (i_aaveOracle.getAssetPrice(i_wmaticAddress) * 1e10);
     }
 
@@ -769,18 +769,18 @@ contract ChamberV1 is
         }
     }
 
-    function getAUSDCTokenBalance() public view returns (uint256) {
+    function getAUSDCTokenBalance() private view returns (uint256) {
         return i_aaveAUSDCToken.balanceOf(address(this));
     }
 
-    function getVWETHTokenBalance() public view returns (uint256) {
+    function getVWETHTokenBalance() private view returns (uint256) {
         return
             (i_aaveVWETHToken.scaledBalanceOf(address(this)) *
                 i_aaveV3Pool.getReserveNormalizedVariableDebt(i_wethAddress)) /
             1e27;
     }
 
-    function getVWMATICTokenBalance() public view returns (uint256) {
+    function getVWMATICTokenBalance() private view returns (uint256) {
         return
             (i_aaveVWMATICToken.scaledBalanceOf(address(this)) *
                 i_aaveV3Pool.getReserveNormalizedVariableDebt(
@@ -818,14 +818,14 @@ contract ChamberV1 is
     // Admin functions
     // =================================
 
-    function _redeemFees() public onlyOwner {
+    function _redeemFees() external onlyOwner {
         TransferHelper.safeTransfer(i_wmaticAddress, owner(), s_cetraFeeWmatic);
         TransferHelper.safeTransfer(i_wethAddress, owner(), s_cetraFeeWeth);
         s_cetraFeeWmatic = 0;
         s_cetraFeeWeth = 0;
     }
 
-    function giveApprove(address _token, address _to) public onlyOwner {
+    function giveApprove(address _token, address _to) external onlyOwner {
         TransferHelper.safeApprove(_token, _to, type(uint256).max);
     }
 
@@ -834,7 +834,7 @@ contract ChamberV1 is
         uint256 _minLTV,
         uint256 _maxLTV,
         uint256 _hedgeDev
-    ) public onlyOwner {
+    ) external onlyOwner {
         s_targetLTV = _targetLTV;
         s_minLTV = _minLTV;
         s_maxLTV = _maxLTV;
