@@ -59,9 +59,8 @@ library TransferHelper {
     }
 
     function safeGetBalance(
-        address token,
-        address owner
-    ) internal view returns (uint256 balance) {
-        balance = IERC20(token).balanceOf(address(this));
+        address token
+    ) internal view returns (uint256) {
+        return IERC20(token).balanceOf(address(this));
     }
 }
