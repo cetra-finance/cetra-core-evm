@@ -601,16 +601,16 @@ contract ChamberV1 is
     function currentLTV() public view returns (uint256) {
         // return currentETHBorrowed * getToken0OraclePrice() / currentUSDInCollateral/getUsdOraclePrice()
         (
-            uint256 totalCollateralToken0,
-            uint256 totalBorrowedToken0,
+            uint256 totalCollateralETH,
+            uint256 totalBorrowedETH,
             ,
             ,
             ,
 
         ) = i_aaveV3Pool.getUserAccountData(address(this));
-        uint256 ltv = totalCollateralToken0 == 0
+        uint256 ltv = totalCollateralETH == 0
             ? 0
-            : (PRECISION * totalBorrowedToken0) / totalCollateralToken0;
+            : (PRECISION * totalBorrowedETH) / totalCollateralETH;
         return ltv;
     }
 

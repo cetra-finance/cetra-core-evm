@@ -385,12 +385,12 @@ describe("Basic tests new", function () {
         chamber = await chamberFactory.deploy(
             currNetworkConfig.uniswapRouterAddress,
             currNetworkConfig.uniswapPoolAddress,
-            currNetworkConfig.aaveWTG3Address,
             currNetworkConfig.aaveV3PoolAddress,
             currNetworkConfig.aaveVWETHAddress,
             currNetworkConfig.aaveVWMATICAddress,
             currNetworkConfig.aaveOracleAddress,
-            currNetworkConfig.aaveAUSDCAddress
+            currNetworkConfig.aaveAUSDCAddress,
+            currNetworkConfig.ticksRange
         );
         await chamber.setLTV(
             currNetworkConfig.targetLTV,
