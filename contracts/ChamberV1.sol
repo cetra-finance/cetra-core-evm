@@ -18,6 +18,8 @@ import "./AaveInterfaces/IVariableDebtToken.sol";
 import "./TransferHelper.sol";
 import "./MathHelper.sol";
 
+import "./IChamberV1.sol";
+
 /*Errors */
 error ChamberV1__ReenterancyGuard();
 error ChamberV1__AaveDepositError();
@@ -31,6 +33,7 @@ error ChamberV1__TicksOut();
 error ChamberV1__UpkeepNotNeeded(uint256 _currentLTV, uint256 _totalShares);
 
 contract ChamberV1 is
+    IChamberV1,
     Ownable,
     IUniswapV3MintCallback,
     AutomationCompatibleInterface
@@ -39,8 +42,8 @@ contract ChamberV1 is
     // Storage for users and their deposits
     // =================================
 
-    uint256 public s_totalShares;
-    mapping(address => uint256) public s_userShares;
+    uint256 private s_totalShares;
+    mapping(address => uint256) private s_userShares;
 
     // =================================
     // Storage for pool
@@ -66,9 +69,9 @@ contract ChamberV1 is
 
     int24 private s_ticksRange;
 
-    address public immutable i_usdcAddress;
-    address public immutable i_token0Address;
-    address public immutable i_token1Address;
+    address private immutable i_usdcAddress;
+    address private immutable i_token0Address;
+    address private immutable i_token1Address;
 
     IAToken private immutable i_aaveAUSDCToken;
     IVariableDebtToken private immutable i_aaveVToken0;
@@ -126,7 +129,7 @@ contract ChamberV1 is
     // Main funcitons
     // =================================
 
-    function mint(uint256 usdAmount) external lock {
+    function mint(uint256 usdAmount) external override lock {
         {
             uint256 currUsdBalance = currentUSDBalance();
             uint256 sharesToMint = (currUsdBalance > 10)
@@ -147,7 +150,7 @@ contract ChamberV1 is
         _mint(usdAmount);
     }
 
-    function burn(uint256 _shares) external lock {
+    function burn(uint256 _shares) external override lock {
         uint256 usdcBalanceBefore = TransferHelper.safeGetBalance(
             i_usdcAddress
         );
@@ -562,11 +565,11 @@ contract ChamberV1 is
     // View funcitons
     // =================================
 
-    function getAdminBalance() public view returns (uint256, uint256) {
+    function getAdminBalance() external override view returns (uint256, uint256) {
         return (s_cetraFeeToken1, s_cetraFeeToken0);
     }
 
-    function currentUSDBalance() public view returns (uint256) {
+    function currentUSDBalance() public override view returns (uint256) {
         (
             uint256 token0PoolBalance,
             uint256 token1PoolBalance
@@ -598,7 +601,7 @@ contract ChamberV1 is
         return pureUSDCAmount + poolTokensValue - debtTokensValue;
     }
 
-    function currentLTV() public view returns (uint256) {
+    function currentLTV() public override view returns (uint256) {
         // return currentETHBorrowed * getToken0OraclePrice() / currentUSDInCollateral/getUsdOraclePrice()
         (
             uint256 totalCollateralETH,
@@ -650,9 +653,7 @@ contract ChamberV1 is
     function calculatePoolReserves(
         uint128 liquidity
     ) private view returns (uint256, uint256) {
-        uint256 amount0;
-        uint256 amount1;
-        (amount0, amount1) = LiquidityAmounts.getAmountsForLiquidity(
+        (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
             getSqrtRatioX96(),
             MathHelper.getSqrtRatioAtTick(s_lowerTick),
             MathHelper.getSqrtRatioAtTick(s_upperTick),
@@ -663,6 +664,7 @@ contract ChamberV1 is
 
     function calculateCurrentPoolReserves()
         public
+        override
         view
         returns (uint256, uint256)
     {
@@ -782,6 +784,30 @@ contract ChamberV1 is
     }
 
     // =================================
+    // Getters
+    // =================================
+
+    function get_i_aaveVToken0() external override view returns (address) {
+        return address(i_aaveVToken0);
+    }
+
+    function get_i_aaveVToken1() external override view returns (address) {
+        return address(i_aaveVToken1);
+    }
+
+    function get_i_aaveAUSDCToken() external override view returns (address) {
+        return address(i_aaveAUSDCToken);
+    }
+
+    function get_s_totalShares() external override view returns (uint256) {
+        return s_totalShares;
+    }
+
+    function get_s_userShares(address user) external override view returns (uint256) {
+        return s_userShares[user];
+    }
+
+    // =================================
     // Callbacks
     // =================================
 
@@ -811,18 +837,18 @@ contract ChamberV1 is
     // Admin functions
     // =================================
 
-    function _redeemFees() external onlyOwner {
+    function _redeemFees() external override onlyOwner {
         TransferHelper.safeTransfer(i_token1Address, owner(), s_cetraFeeToken1);
         TransferHelper.safeTransfer(i_token0Address, owner(), s_cetraFeeToken0);
         s_cetraFeeToken1 = 0;
         s_cetraFeeToken0 = 0;
     }
 
-    function setTicksRange(int24 _ticksRange) external onlyOwner {
+    function setTicksRange(int24 _ticksRange) external override onlyOwner {
         s_ticksRange = _ticksRange;
     }
 
-    function giveApprove(address _token, address _to) external onlyOwner {
+    function giveApprove(address _token, address _to) external override onlyOwner {
         TransferHelper.safeApprove(_token, _to, type(uint256).max);
     }
 
@@ -831,7 +857,7 @@ contract ChamberV1 is
         uint256 _minLTV,
         uint256 _maxLTV,
         uint256 _hedgeDev
-    ) external onlyOwner {
+    ) external override onlyOwner {
         s_targetLTV = _targetLTV;
         s_minLTV = _minLTV;
         s_maxLTV = _maxLTV;

@@ -176,13 +176,13 @@ describe("maticToEthPriceFall", function () {
 
     const makeDeposit = async (user, amount) => {
         const contractBalanceBefore = await chamber.currentUSDBalance();
-        // const userInnerBalanceBefore = await chamber.sharesWorth(await chamber.s_userShares(user.address));
+        // const userInnerBalanceBefore = await chamber.sharesWorth(await chamber.get_s_userShares(user.address));
         await chamber.connect(user).mint(amount);
         expect(await chamber.currentUSDBalance()).to.be.closeTo(
             contractBalanceBefore.add(amount),
             10
         );
-        // expect(await chamber.sharesWorth(await chamber.s_userShares(user.address))).to.be.closeTo(userInnerBalanceBefore.add(amount), 10);
+        // expect(await chamber.sharesWorth(await chamber.get_s_userShares(user.address))).to.be.closeTo(userInnerBalanceBefore.add(amount), 10);
     };
 
     const makeBurn = async (user, amount) => {
@@ -494,17 +494,17 @@ describe("maticToEthPriceFall", function () {
 
     describe("users burn all their positions", async function () {
         it("owner burns his position", async function () {
-            const toBurn = await chamber.s_userShares(owner.address);
+            const toBurn = await chamber.get_s_userShares(owner.address);
             await makeBurn(owner, toBurn);
         });
 
         it("user1 burns his position", async function () {
-            const toBurn = await chamber.s_userShares(user1.address);
+            const toBurn = await chamber.get_s_userShares(user1.address);
             await makeBurn(user1, toBurn);
         });
 
         it("user2 burns his position", async function () {
-            const toBurn = await chamber.s_userShares(user2.address);
+            const toBurn = await chamber.get_s_userShares(user2.address);
             await makeBurn(user2, toBurn);
         });
     });

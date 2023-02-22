@@ -326,22 +326,22 @@ describe("Basic tests new1", function () {
         console.log(await chamber.currentLTV());
 
         console.log(
-            `Total amount of shares minted is ${await chamber.s_totalShares()}`
+            `Total amount of shares minted is ${await chamber.get_s_totalShares()}`
         );
         console.log("BALANCE AND SHARESWORTH OF OWNER are");
-        console.log(await chamber.s_userShares(owner.address));
+        console.log(await chamber.get_s_userShares(owner.address));
         console.log(
-            await chamber.sharesWorth(await chamber.s_userShares(owner.address))
+            await chamber.sharesWorth(await chamber.get_s_userShares(owner.address))
         );
         console.log("BALANCE AND SHARESWORTH OF USER1 are");
-        console.log(await chamber.s_userShares(user1.address));
+        console.log(await chamber.get_s_userShares(user1.address));
         console.log(
-            await chamber.sharesWorth(await chamber.s_userShares(user1.address))
+            await chamber.sharesWorth(await chamber.get_s_userShares(user1.address))
         );
         console.log("BALANCE AND SHARESWORTH OF USER2 are");
-        console.log(await chamber.s_userShares(user2.address));
+        console.log(await chamber.get_s_userShares(user2.address));
         console.log(
-            await chamber.sharesWorth(await chamber.s_userShares(user2.address))
+            await chamber.sharesWorth(await chamber.get_s_userShares(user2.address))
         );
         console.log("TOKENS LEFT IN CONTRACT");
         console.log("usd", await usd.balanceOf(chamber.address));
@@ -414,7 +414,7 @@ describe("Basic tests new1", function () {
         const ownerUsdBalanceBefore = await usd.balanceOf(owner.address);
         await chamber
             .connect(owner)
-            .burn(await chamber.s_userShares(owner.address));
+            .burn(await chamber.get_s_userShares(owner.address));
         console.log(
             "owner balance diff",
             (await usd.balanceOf(owner.address)).sub(ownerUsdBalanceBefore)
@@ -424,7 +424,7 @@ describe("Basic tests new1", function () {
 
         await chamber
             .connect(user1)
-            .burn(await chamber.s_userShares(user1.address));
+            .burn(await chamber.get_s_userShares(user1.address));
         console.log(
             "user1 balance diff",
             (await usd.balanceOf(user1.address)).sub(user1UsdBalanceBefore)
@@ -433,7 +433,7 @@ describe("Basic tests new1", function () {
         const user2UsdBalanceBefore = await usd.balanceOf(user2.address);
         await chamber
             .connect(user2)
-            .burn(await chamber.s_userShares(user2.address));
+            .burn(await chamber.get_s_userShares(user2.address));
         console.log(
             "user2 balance diff",
             (await usd.balanceOf(user2.address)).sub(user2UsdBalanceBefore)
