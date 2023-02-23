@@ -91,7 +91,9 @@ contract ChamberV1 is
     // =================================
 
     modifier lock() {
-        if (!unlocked) { revert ChamberV1__ReenterancyGuard(); }
+        if (!unlocked) {
+            revert ChamberV1__ReenterancyGuard();
+        }
         unlocked = false;
         _;
         unlocked = true;
@@ -162,8 +164,7 @@ contract ChamberV1 is
         TransferHelper.safeTransfer(
             i_usdcAddress,
             msg.sender,
-            TransferHelper.safeGetBalance(i_usdcAddress) -
-                usdcBalanceBefore
+            TransferHelper.safeGetBalance(i_usdcAddress) - usdcBalanceBefore
         );
     }
 
@@ -176,7 +177,10 @@ contract ChamberV1 is
         returns (bool upkeepNeeded, bytes memory /* performData */)
     {
         uint256 _currentLTV = currentLTV();
-        (uint256 token0Pool, uint256 token1Pool) = calculateCurrentPoolReserves();
+        (
+            uint256 token0Pool,
+            uint256 token1Pool
+        ) = calculateCurrentPoolReserves();
         uint256 token0Borrowed = getVToken0Balance();
         uint256 token1Borrowed = getVToken1Balance();
         bool tooMuchExposureTakenToken0;
@@ -229,8 +233,8 @@ contract ChamberV1 is
         int24 currentTick = getTick();
 
         if (!s_liquidityTokenId) {
-            s_lowerTick = ((currentTick - s_ticksRange) / 10) * 10;
-            s_upperTick = ((currentTick + s_ticksRange) / 10) * 10;
+            s_lowerTick = ((currentTick - s_ticksRange) / 60) * 60;
+            s_upperTick = ((currentTick + s_ticksRange) / 60) * 60;
             usedLTV = s_targetLTV;
             s_liquidityTokenId = true;
         } else {
@@ -391,9 +395,7 @@ contract ChamberV1 is
             );
             if (
                 token1OwnedByUser +
-                    TransferHelper.safeGetBalance(
-                        i_token1Address
-                    ) -
+                    TransferHelper.safeGetBalance(i_token1Address) -
                     token1BalanceBefore <
                 token1DebtToCover
             ) {
@@ -432,9 +434,7 @@ contract ChamberV1 is
             );
             if (
                 (token0OwnedByUser +
-                    TransferHelper.safeGetBalance(
-                        i_token0Address
-                    )) -
+                    TransferHelper.safeGetBalance(i_token0Address)) -
                     token0BalanceBefore <
                 token0DebtToCover
             ) {
@@ -442,7 +442,12 @@ contract ChamberV1 is
             }
         }
 
-        i_aaveV3Pool.repay(i_token0Address, token0DebtToCover, 2, address(this));
+        i_aaveV3Pool.repay(
+            i_token0Address,
+            token0DebtToCover,
+            2,
+            address(this)
+        );
 
         if (
             TransferHelper.safeGetBalance(i_token0Address) >=
@@ -543,14 +548,10 @@ contract ChamberV1 is
             type(uint128).max,
             type(uint128).max
         );
-        uint256 feeToken1 = TransferHelper.safeGetBalance(
-            i_token1Address
-        ) -
+        uint256 feeToken1 = TransferHelper.safeGetBalance(i_token1Address) -
             preBalanceToken1 -
             burnToken1;
-        uint256 feeToken0 = TransferHelper.safeGetBalance(
-            i_token0Address
-        ) -
+        uint256 feeToken0 = TransferHelper.safeGetBalance(i_token0Address) -
             preBalanceToken0 -
             burnToken0;
         return (burnToken1, burnToken0, feeToken1, feeToken0);
@@ -565,11 +566,16 @@ contract ChamberV1 is
     // View funcitons
     // =================================
 
-    function getAdminBalance() external override view returns (uint256, uint256) {
+    function getAdminBalance()
+        external
+        view
+        override
+        returns (uint256, uint256)
+    {
         return (s_cetraFeeToken1, s_cetraFeeToken0);
     }
 
-    function currentUSDBalance() public override view returns (uint256) {
+    function currentUSDBalance() public view override returns (uint256) {
         (
             uint256 token0PoolBalance,
             uint256 token1PoolBalance
@@ -601,7 +607,7 @@ contract ChamberV1 is
         return pureUSDCAmount + poolTokensValue - debtTokensValue;
     }
 
-    function currentLTV() public override view returns (uint256) {
+    function currentLTV() public view override returns (uint256) {
         // return currentETHBorrowed * getToken0OraclePrice() / currentUSDInCollateral/getUsdOraclePrice()
         (
             uint256 totalCollateralETH,
@@ -653,19 +659,20 @@ contract ChamberV1 is
     function calculatePoolReserves(
         uint128 liquidity
     ) private view returns (uint256, uint256) {
-        (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
-            getSqrtRatioX96(),
-            MathHelper.getSqrtRatioAtTick(s_lowerTick),
-            MathHelper.getSqrtRatioAtTick(s_upperTick),
-            liquidity
-        );
+        (uint256 amount0, uint256 amount1) = LiquidityAmounts
+            .getAmountsForLiquidity(
+                getSqrtRatioX96(),
+                MathHelper.getSqrtRatioAtTick(s_lowerTick),
+                MathHelper.getSqrtRatioAtTick(s_upperTick),
+                liquidity
+            );
         return (amount0, amount1);
     }
 
     function calculateCurrentPoolReserves()
         public
-        override
         view
+        override
         returns (uint256, uint256)
     {
         uint128 liquidity = getLiquidity();
@@ -771,8 +778,9 @@ contract ChamberV1 is
     function getVToken0Balance() private view returns (uint256) {
         return
             (i_aaveVToken0.scaledBalanceOf(address(this)) *
-                i_aaveV3Pool.getReserveNormalizedVariableDebt(i_token0Address)) /
-            1e27;
+                i_aaveV3Pool.getReserveNormalizedVariableDebt(
+                    i_token0Address
+                )) / 1e27;
     }
 
     function getVToken1Balance() private view returns (uint256) {
@@ -787,23 +795,25 @@ contract ChamberV1 is
     // Getters
     // =================================
 
-    function get_i_aaveVToken0() external override view returns (address) {
+    function get_i_aaveVToken0() external view override returns (address) {
         return address(i_aaveVToken0);
     }
 
-    function get_i_aaveVToken1() external override view returns (address) {
+    function get_i_aaveVToken1() external view override returns (address) {
         return address(i_aaveVToken1);
     }
 
-    function get_i_aaveAUSDCToken() external override view returns (address) {
+    function get_i_aaveAUSDCToken() external view override returns (address) {
         return address(i_aaveAUSDCToken);
     }
 
-    function get_s_totalShares() external override view returns (uint256) {
+    function get_s_totalShares() external view override returns (uint256) {
         return s_totalShares;
     }
 
-    function get_s_userShares(address user) external override view returns (uint256) {
+    function get_s_userShares(
+        address user
+    ) external view override returns (uint256) {
         return s_userShares[user];
     }
 
@@ -828,7 +838,11 @@ contract ChamberV1 is
                 amount0Owed
             );
         if (amount1Owed > 0)
-            TransferHelper.safeTransfer(i_token0Address, msg.sender, amount1Owed);
+            TransferHelper.safeTransfer(
+                i_token0Address,
+                msg.sender,
+                amount1Owed
+            );
     }
 
     receive() external payable {}
@@ -848,7 +862,10 @@ contract ChamberV1 is
         s_ticksRange = _ticksRange;
     }
 
-    function giveApprove(address _token, address _to) external override onlyOwner {
+    function giveApprove(
+        address _token,
+        address _to
+    ) external override onlyOwner {
         TransferHelper.safeApprove(_token, _to, type(uint256).max);
     }
 
