@@ -6,7 +6,7 @@ const helpers = require("@nomicfoundation/hardhat-network-helpers");
 const { mine } = require("@nomicfoundation/hardhat-network-helpers");
 const JSBI = require("jsbi");
 
-describe("Basic tests new", function () {
+describe("Basic tests newCrv", function () {
     let owner, _, user1, user2, donorWallet;
     let usd, crv, aUSD, vMATIC, vCRV;
     let aaveOracle, UniRouter;
@@ -303,10 +303,7 @@ describe("Basic tests new", function () {
     const makeAllChecks = async () => {
         console.log("TOKENS LEFT IN CONTRACT");
         console.log("usd:", (await usd.balanceOf(chamber.address)).toString());
-        console.log(
-            "crv:",
-            (await crv.balanceOf(chamber.address)).toString()
-        );
+        console.log("crv:", (await crv.balanceOf(chamber.address)).toString());
         console.log(
             "matic:",
             (await ethers.provider.getBalance(chamber.address)).toString()
@@ -317,8 +314,9 @@ describe("Basic tests new", function () {
         );
 
         console.log(
-            "Owner fees:", (await chamber.getAdminBalance()).toString(),
-        )
+            "Owner fees:",
+            (await chamber.getAdminBalance()).toString()
+        );
 
         console.log("TOKENS IN UNI POSITION:");
         console.log((await chamber.calculateCurrentPoolReserves()).toString());
@@ -368,15 +366,15 @@ describe("Basic tests new", function () {
         aUSD = await ethers.getContractAt(
             "IERC20",
             currNetworkConfig.aaveAUSDCAddress
-        )
+        );
         vMATIC = await ethers.getContractAt(
             "IERC20",
             currNetworkConfig.aaveVWMATICAddress
-        )
+        );
         vCRV = await ethers.getContractAt(
             "IERC20",
             currNetworkConfig.aaveVCRVAddress
-        )
+        );
         aaveOracle = await ethers.getContractAt(
             "IAaveOracle",
             currNetworkConfig.aaveOracleAddress
@@ -397,6 +395,8 @@ describe("Basic tests new", function () {
             currNetworkConfig.aaveAUSDCAddress,
             currNetworkConfig.ticksRange
         );
+        console.log(currNetworkConfig.uniswapPoolAddress);
+
         await chamber.setLTV(
             currNetworkConfig.targetLTV,
             currNetworkConfig.minLTV,
@@ -615,8 +615,8 @@ describe("Basic tests new", function () {
     describe("Owner withdraw fees", async function () {
         it("owner withdraws fees", async function () {
             await chamber.connect(owner)._redeemFees();
-        })
-    })
+        });
+    });
 
     describe("checks 4", async function () {
         it("makes all checks", async function () {

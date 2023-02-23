@@ -261,30 +261,20 @@ contract ChamberV1 is
         }
 
         uint256 token0ToBorrow = (usdAmount * usdcOraclePrice * usedLTV) /
-            ((token1OraclePrice * amount0) /
-                amount1 /
+            (token0OraclePrice /
                 1e12 +
-                token0OraclePrice /
-                1e12) /
-            PRECISION;
-
-        uint256 token1ToBorrow = (usdAmount * usdcOraclePrice * usedLTV) /
-            (token1OraclePrice /
-                1e12 +
-                (token0OraclePrice * amount1) /
+                (token1OraclePrice * amount1) /
                 amount0 /
                 1e12) /
             PRECISION;
 
-        if (token1ToBorrow > 0) {
-            i_aaveV3Pool.borrow(
-                i_token1Address,
-                token1ToBorrow,
-                2,
-                0,
-                address(this)
-            );
-        }
+        uint256 token1ToBorrow = (usdAmount * usdcOraclePrice * usedLTV) /
+            ((token0OraclePrice * amount0) /
+                amount1 /
+                1e12 +
+                token1OraclePrice /
+                1e12) /
+            PRECISION;
 
         if (token0ToBorrow > 0) {
             i_aaveV3Pool.borrow(
@@ -295,20 +285,30 @@ contract ChamberV1 is
                 address(this)
             );
         }
+        if (token1ToBorrow > 0) {
+            i_aaveV3Pool.borrow(
+                i_token1Address,
+                token1ToBorrow,
+                2,
+                0,
+                address(this)
+            );
+        }
 
         {
-            uint256 token1Recieved = TransferHelper.safeGetBalance(
-                i_token1Address
-            ) - s_cetraFeeToken1;
             uint256 token0Recieved = TransferHelper.safeGetBalance(
                 i_token0Address
             ) - s_cetraFeeToken0;
+            uint256 token1Recieved = TransferHelper.safeGetBalance(
+                i_token1Address
+            ) - s_cetraFeeToken1;
+
             uint128 liquidityMinted = LiquidityAmounts.getLiquidityForAmounts(
                 getSqrtRatioX96(),
                 MathHelper.getSqrtRatioAtTick(s_lowerTick),
                 MathHelper.getSqrtRatioAtTick(s_upperTick),
-                token1Recieved,
-                token0Recieved
+                token0Recieved,
+                token1Recieved
             );
 
             i_uniswapPool.mint(
@@ -323,34 +323,34 @@ contract ChamberV1 is
 
     function _burn(uint256 _shares) private {
         (
-            uint256 burnToken1,
             uint256 burnToken0,
-            uint256 feeToken1,
-            uint256 feeToken0
+            uint256 burnToken1,
+            uint256 feeToken0,
+            uint256 feeToken1
         ) = _withdraw(uint128((getLiquidity() * _shares) / s_totalShares));
-        _applyFees(feeToken1, feeToken0);
+        _applyFees(feeToken0, feeToken1);
 
-        uint256 amountToken1 = burnToken1 +
-            ((TransferHelper.safeGetBalance(i_token1Address) -
-                burnToken1 -
-                s_cetraFeeToken1) * _shares) /
-            s_totalShares;
         uint256 amountToken0 = burnToken0 +
             ((TransferHelper.safeGetBalance(i_token0Address) -
                 burnToken0 -
                 s_cetraFeeToken0) * _shares) /
             s_totalShares;
+        uint256 amountToken1 = burnToken1 +
+            ((TransferHelper.safeGetBalance(i_token1Address) -
+                burnToken1 -
+                s_cetraFeeToken1) * _shares) /
+            s_totalShares;
 
         {
             (
-                uint256 token1Remainder,
-                uint256 token0Remainder
-            ) = _repayAndWithdraw(_shares, amountToken1, amountToken0);
-            if (token1Remainder > 0) {
-                swapExactAssetToStable(i_token1Address, token1Remainder);
-            }
+                uint256 token0Remainder,
+                uint256 token1Remainder
+            ) = _repayAndWithdraw(_shares, amountToken0, amountToken1);
             if (token0Remainder > 0) {
                 swapExactAssetToStable(i_token0Address, token0Remainder);
+            }
+            if (token1Remainder > 0) {
+                swapExactAssetToStable(i_token1Address, token1Remainder);
             }
         }
     }
@@ -367,8 +367,8 @@ contract ChamberV1 is
 
     function _repayAndWithdraw(
         uint256 _shares,
-        uint256 token1OwnedByUser,
-        uint256 token0OwnedByUser
+        uint256 token0OwnedByUser,
+        uint256 token1OwnedByUser
     ) private returns (uint256, uint256) {
         uint256 token1DebtToCover = (getVToken1Balance() * _shares) /
             s_totalShares;
@@ -468,7 +468,7 @@ contract ChamberV1 is
             address(this)
         );
 
-        return (token1Remainder, token0Remainder);
+        return (token0Remainder, token1Remainder);
     }
 
     function swapExactAssetToStable(
@@ -536,7 +536,7 @@ contract ChamberV1 is
         uint256 preBalanceToken0 = TransferHelper.safeGetBalance(
             i_token0Address
         );
-        (uint256 burnToken1, uint256 burnToken0) = i_uniswapPool.burn(
+        (uint256 burnToken0, uint256 burnToken1) = i_uniswapPool.burn(
             s_lowerTick,
             s_upperTick,
             liquidityToBurn
@@ -554,10 +554,10 @@ contract ChamberV1 is
         uint256 feeToken0 = TransferHelper.safeGetBalance(i_token0Address) -
             preBalanceToken0 -
             burnToken0;
-        return (burnToken1, burnToken0, feeToken1, feeToken0);
+        return (burnToken0, burnToken1, feeToken0, feeToken1);
     }
 
-    function _applyFees(uint256 _feeToken1, uint256 _feeToken0) private {
+    function _applyFees(uint256 _feeToken0, uint256 _feeToken1) private {
         s_cetraFeeToken0 += (_feeToken0 * CETRA_FEE) / PRECISION;
         s_cetraFeeToken1 += (_feeToken1 * CETRA_FEE) / PRECISION;
     }
@@ -572,7 +572,7 @@ contract ChamberV1 is
         override
         returns (uint256, uint256)
     {
-        return (s_cetraFeeToken1, s_cetraFeeToken0);
+        return (s_cetraFeeToken0, s_cetraFeeToken1);
     }
 
     function currentUSDBalance() public view override returns (uint256) {
@@ -581,8 +581,8 @@ contract ChamberV1 is
             uint256 token1PoolBalance
         ) = calculateCurrentPoolReserves();
         (
-            uint256 token1FeePending,
-            uint256 token0FeePending
+            uint256 token0FeePending,
+            uint256 token1FeePending
         ) = calculateCurrentFees();
         uint256 pureUSDCAmount = getAUSDCTokenBalance() +
             TransferHelper.safeGetBalance(i_usdcAddress);
@@ -678,7 +678,7 @@ contract ChamberV1 is
         uint128 liquidity = getLiquidity();
 
         // compute current holdings from liquidity
-        (uint256 amount1Current, uint256 amount0Current) = LiquidityAmounts
+        (uint256 amount0Current, uint256 amount1Current) = LiquidityAmounts
             .getAmountsForLiquidity(
                 getSqrtRatioX96(),
                 MathHelper.getSqrtRatioAtTick(s_lowerTick),
@@ -833,13 +833,13 @@ contract ChamberV1 is
 
         if (amount0Owed > 0)
             TransferHelper.safeTransfer(
-                i_token1Address,
+                i_token0Address,
                 msg.sender,
                 amount0Owed
             );
         if (amount1Owed > 0)
             TransferHelper.safeTransfer(
-                i_token0Address,
+                i_token1Address,
                 msg.sender,
                 amount1Owed
             );
