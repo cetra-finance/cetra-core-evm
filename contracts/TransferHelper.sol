@@ -4,6 +4,11 @@ pragma solidity >=0.8.0;
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 
 library TransferHelper {
+
+    error STF();
+    error ST();
+    error SA();
+    error STE();
     /// @notice Transfers tokens from the targeted address to the given destination
     /// @notice Errors with 'STF' if transfer fails
     /// @param token The contract address of the token to be transferred
@@ -18,7 +23,10 @@ library TransferHelper {
     ) internal {
         (bool success, bytes memory data) =
             token.call(abi.encodeWithSelector(IERC20.transferFrom.selector, from, to, value));
-        require(success && (data.length == 0 || abi.decode(data, (bool))), 'STF');
+        if (!success || (data.length > 0 && !abi.decode(data, (bool)))) {
+            revert STF();
+        }
+        // require(success && (data.length == 0 || abi.decode(data, (bool))), 'STF');
     }
 
     /// @notice Transfers tokens from msg.sender to a recipient
@@ -32,7 +40,10 @@ library TransferHelper {
         uint256 value
     ) internal {
         (bool success, bytes memory data) = token.call(abi.encodeWithSelector(IERC20.transfer.selector, to, value));
-        require(success && (data.length == 0 || abi.decode(data, (bool))), 'ST');
+        if (!success || (data.length > 0 && !abi.decode(data, (bool)))) {
+            revert ST();
+        }
+        // require(success && (data.length == 0 || abi.decode(data, (bool))), 'ST');
     }
 
     /// @notice Approves the stipulated contract to spend the given allowance in the given token
@@ -46,7 +57,10 @@ library TransferHelper {
         uint256 value
     ) internal {
         (bool success, bytes memory data) = token.call(abi.encodeWithSelector(IERC20.approve.selector, to, value));
-        require(success && (data.length == 0 || abi.decode(data, (bool))), 'SA');
+        if (!success || (data.length > 0 && !abi.decode(data, (bool)))) {
+            revert SA();
+        }
+        // require(success && (data.length == 0 || abi.decode(data, (bool))), 'SA');
     }
 
     /// @notice Transfers ETH to the recipient address
@@ -55,7 +69,10 @@ library TransferHelper {
     /// @param value The value to be transferred
     function safeTransferETH(address to, uint256 value) internal {
         (bool success, ) = to.call{value: value}(new bytes(0));
-        require(success, 'STE');
+        if (!success) {
+            revert STE();
+        }
+        // require(success, 'STE');
     }
 
     function safeGetBalance(
