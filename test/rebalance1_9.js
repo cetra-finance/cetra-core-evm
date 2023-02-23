@@ -391,8 +391,8 @@ describe("Basic tests new9", function () {
             currNetworkConfig.uniswapRouterAddress,
             currNetworkConfig.uniswapPoolAddress,
             currNetworkConfig.aaveV3PoolAddress,
-            currNetworkConfig.aaveVWETHAddress,
             currNetworkConfig.aaveVWMATICAddress,
+            currNetworkConfig.aaveVWETHAddress,
             currNetworkConfig.aaveOracleAddress,
             currNetworkConfig.aaveAUSDCAddress,
             currNetworkConfig.ticksRange

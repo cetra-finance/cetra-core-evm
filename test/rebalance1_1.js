@@ -287,8 +287,8 @@ describe("maticToEthPriceConst", function () {
             currNetworkConfig.uniswapRouterAddress,
             currNetworkConfig.uniswapPoolAddress,
             currNetworkConfig.aaveV3PoolAddress,
-            currNetworkConfig.aaveVWETHAddress,
             currNetworkConfig.aaveVWMATICAddress,
+            currNetworkConfig.aaveVWETHAddress,
             currNetworkConfig.aaveOracleAddress,
             currNetworkConfig.aaveAUSDCAddress,
             currNetworkConfig.ticksRange
