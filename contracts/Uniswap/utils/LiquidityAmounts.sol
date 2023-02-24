@@ -115,12 +115,12 @@ library LiquidityAmounts {
         if (sqrtRatioAX96 > sqrtRatioBX96)
             (sqrtRatioAX96, sqrtRatioBX96) = (sqrtRatioBX96, sqrtRatioAX96);
 
-        return
-            FullMath.mulDiv(
-                uint256(liquidity) << FixedPoint96.RESOLUTION,
-                sqrtRatioBX96 - sqrtRatioAX96,
-                sqrtRatioBX96
-            ) / sqrtRatioAX96;
+        return (
+            (uint256(liquidity) << FixedPoint96.RESOLUTION) / 1e6 *
+            (sqrtRatioBX96 - sqrtRatioAX96) /
+            sqrtRatioBX96 / 
+            sqrtRatioAX96 * 1e6
+        );
     }
 
     /// @notice Computes the amount of token1 for a given amount of liquidity and a price range
