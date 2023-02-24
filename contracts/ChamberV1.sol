@@ -675,15 +675,13 @@ contract ChamberV1 is
         override
         returns (uint256, uint256)
     {
-        uint128 liquidity = getLiquidity();
-
         // compute current holdings from liquidity
         (uint256 amount0Current, uint256 amount1Current) = LiquidityAmounts
             .getAmountsForLiquidity(
                 getSqrtRatioX96(),
                 MathHelper.getSqrtRatioAtTick(s_lowerTick),
                 MathHelper.getSqrtRatioAtTick(s_upperTick),
-                liquidity
+                getLiquidity()
             );
 
         return (amount0Current, amount1Current);
