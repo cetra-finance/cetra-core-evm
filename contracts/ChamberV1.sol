@@ -32,6 +32,7 @@ error ChamberV1__sharesWorthMoreThenDep();
 error ChamberV1__TicksOut();
 error ChamberV1__UpkeepNotNeeded(uint256 _currentLTV, uint256 _totalShares);
 
+// For Wmatic/Weth
 contract ChamberV1 is
     IChamberV1,
     Ownable,

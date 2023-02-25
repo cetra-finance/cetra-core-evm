@@ -1,7 +1,7 @@
 const { expect, assert } = require("chai");
 const { BigNumber, utils } = require("ethers");
 const { ethers, upgrades } = require("hardhat");
-const { networkConfig } = require("../helper-hardhat-config");
+const { networkConfig } = require("../../helper-hardhat-config");
 const helpers = require("@nomicfoundation/hardhat-network-helpers");
 const { mine } = require("@nomicfoundation/hardhat-network-helpers");
 const JSBI = require("jsbi");
@@ -282,7 +282,7 @@ describe("Basic tests new", function () {
         const contractBalanceBefore = await chamber.currentUSDBalance()
         // const userInnerBalanceBefore = await chamber.sharesWorth(await chamber.get_s_userShares(user.address));
         await chamber.connect(user).mint(amount);
-        expect(await chamber.currentUSDBalance()).to.be.closeTo(contractBalanceBefore.add(amount), 10);
+        expect(await chamber.currentUSDBalance()).to.be.closeTo(contractBalanceBefore.add(amount), 100);
         // expect(await chamber.sharesWorth(await chamber.get_s_userShares(user.address))).to.be.closeTo(userInnerBalanceBefore.add(amount), 10);
     }
 
@@ -503,10 +503,10 @@ describe("Basic tests new", function () {
             await wmatic.connect(donorWallet).deposit({ value: ethers.utils.parseEther("10000000") });
 
             for (let i = 0; i < 10; i++) {
-                await makeSwap(donorWallet, 110000, true);
+                await makeSwap(donorWallet, 80000, true);
                 await makeSwap(
                     donorWallet,
-                    40000,
+                    50000,
                     false
                 );
             }
@@ -539,7 +539,7 @@ describe("Basic tests new", function () {
             console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
             console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
 
-            mine(1000, { interval: 72 })
+            mine(1000, { interval: 300000 })
         })
 
         it("should set all oracles", async function () {

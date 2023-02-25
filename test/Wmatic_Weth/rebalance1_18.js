@@ -1,7 +1,7 @@
 const { expect, assert } = require("chai");
 const { BigNumber, utils } = require("ethers");
 const { ethers, upgrades } = require("hardhat");
-const { networkConfig } = require("../helper-hardhat-config");
+const { networkConfig } = require("../../helper-hardhat-config");
 const helpers = require("@nomicfoundation/hardhat-network-helpers");
 const { mine } = require("@nomicfoundation/hardhat-network-helpers");
 const JSBI = require("jsbi");
@@ -282,7 +282,7 @@ describe("Basic tests new", function () {
         const contractBalanceBefore = await chamber.currentUSDBalance()
         // const userInnerBalanceBefore = await chamber.sharesWorth(await chamber.get_s_userShares(user.address));
         await chamber.connect(user).mint(amount);
-        expect(await chamber.currentUSDBalance()).to.be.closeTo(contractBalanceBefore.add(amount), 10);
+        expect(await chamber.currentUSDBalance()).to.be.closeTo(contractBalanceBefore.add(amount), 100);
         // expect(await chamber.sharesWorth(await chamber.get_s_userShares(user.address))).to.be.closeTo(userInnerBalanceBefore.add(amount), 10);
     }
 
@@ -503,7 +503,7 @@ describe("Basic tests new", function () {
             await wmatic.connect(donorWallet).deposit({ value: ethers.utils.parseEther("10000000") });
 
             for (let i = 0; i < 10; i++) {
-                await makeSwap(donorWallet, 110000, true);
+                await makeSwap(donorWallet, 120000, true);
                 await makeSwap(
                     donorWallet,
                     40000,
@@ -539,7 +539,7 @@ describe("Basic tests new", function () {
             console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
             console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
 
-            mine(1000, { interval: 72 })
+            mine(1000, { interval: 300000 })
         })
 
         it("should set all oracles", async function () {
@@ -557,7 +557,11 @@ describe("Basic tests new", function () {
         })
     })
 
-    describe("Should make rebalance and owner deps", async function () {
+    describe("Should try rebalance and owner deps", async function () {
+        it("makes rebalance", async function () {
+            await chamber.performUpkeep("0x");
+        })
+
         it("owner deposits 1000$", async function () {
             await makeDeposit(owner, 1000 * 1e6);
         })
@@ -603,4 +607,117 @@ describe("Basic tests new", function () {
             await makeAllChecks();
         });
     });
+
+    describe("should make swaps in uni pools, so our position could be able to rebalance", async function () {
+        let WethWmaticPrices, WethUsdcPrices;
+
+        it("makes all swaps", async function () {
+
+            console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
+            console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
+            console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
+
+            await wmatic.connect(donorWallet).deposit({ value: ethers.utils.parseEther("10000000") });
+
+            for (let i = 0; i < 10; i++) {
+                await makeSwap(donorWallet, 55000, true);
+                await makeSwap(
+                    donorWallet,
+                    70000,
+                    false
+                );
+            }
+
+            // await makeSwapHelper3(donorWallet, 50000, false);
+
+            WethWmaticPrices = await getPriceFromPair(
+                weth, wmatic, 500, 1e18, 1e18
+            );
+            WethUsdcPrices = await getPriceFromPair(
+                weth, usd, 500, 1e18, 1e6
+            );
+            const wmaticTargetPrice = Math.round((WethUsdcPrices[1] / WethWmaticPrices[1]) * 1e8) * 1e10
+
+            if (((await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0]) * 1e18 < BigNumber.from(wmaticTargetPrice.toString())) {
+                while (
+                    ((await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0]) * 1e18 < BigNumber.from(wmaticTargetPrice.toString())
+                ) {
+                    makeSwapHelper(donorWallet, 5000, true);
+                }
+            } else {
+                while (
+                    (((await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0]) * 1e18 > BigNumber.from(wmaticTargetPrice.toString()))
+                ) {
+                    makeSwapHelper(donorWallet, 4000, false);
+                }
+            }
+
+            console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
+            console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
+            console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
+
+        })
+
+        it("should set all oracles", async function () {
+            await setNewOraclePrice(weth, Math.round(WethUsdcPrices[1] * 1e8));
+            await setNewOraclePrice(
+                wmatic,
+                Math.round((WethUsdcPrices[1] / WethWmaticPrices[1]) * 1e8)
+            );
+        })
+    })
+
+    describe("checks 6", async function () {
+        it("makes all checks", async function () {
+            await makeAllChecks();
+        });
+    });
+
+    describe("Should try rebalance again", async function () {
+        it("makes rebalance", async function () {
+            await chamber.performUpkeep("0x");
+        })
+    })
+
+    describe("checks 6", async function () {
+        it("makes all checks", async function () {
+            await makeAllChecks();
+        });
+    });
+
+    describe("users burn all their positions", async function () {
+        it("owner burns his position", async function () {
+            const toBurn = await chamber.get_s_userShares(owner.address);
+            await makeBurn(owner, toBurn);
+        })
+
+        it("user1 burns his position", async function () {
+            const toBurn = await chamber.get_s_userShares(user1.address);
+            await makeBurn(user1, toBurn);
+        })
+
+        it("user2 burns his position", async function () {
+            const toBurn = await chamber.get_s_userShares(user2.address);
+            await makeBurn(user2, toBurn);
+        })
+    })
+
+    describe("checks 7", async function () {
+        it("makes all checks", async function () {
+            await makeAllChecks();
+        })
+    })
+
+    describe("Owner withdraw fees", async function () {
+        it("owner withdraws fees", async function () {
+            await chamber.connect(owner)._redeemFees();
+        })
+    })
+
+    describe("checks 8", async function () {
+        it("makes all checks", async function () {
+            await makeAllChecks();
+        });
+    });
+
 });

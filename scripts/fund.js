@@ -1,5 +1,5 @@
 const { ethers } = require("hardhat");
-const { networkConfig } = require("../helper-hardhat-config");
+const { networkConfig } = require("../../helper-hardhat-config");
 const fs = require("fs");
 
 async function enterChamber() {

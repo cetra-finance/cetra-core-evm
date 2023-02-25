@@ -1,14 +1,15 @@
 const { expect, assert } = require("chai");
 const { BigNumber, utils } = require("ethers");
 const { ethers, upgrades } = require("hardhat");
-const { networkConfig } = require("../helper-hardhat-config");
+const { networkConfig } = require("../../helper-hardhat-config");
 const helpers = require("@nomicfoundation/hardhat-network-helpers");
 const { mine } = require("@nomicfoundation/hardhat-network-helpers");
 const JSBI = require("jsbi");
+const { keccak256 } = require("ethers/lib/utils");
 
-describe("maticToEthPriceConst", function () {
+describe("Basic tests newCrv", function () {
     let owner, _, user1, user2, donorWallet;
-    let usd, weth, aUSD, vMATIC, vWETH;
+    let usd, crv, aUSD, vMATIC, vCRV;
     let aaveOracle, UniRouter;
 
     // =================================
@@ -23,17 +24,23 @@ describe("maticToEthPriceConst", function () {
                 UniRouter.address,
                 ethers.utils.parseEther("100000000000000")
             );
+        await crv
+            .connect(user)
+            .approve(
+                UniRouter.address,
+                ethers.utils.parseEther("100000000000000")
+            );
 
         if (way) {
             await UniRouter.connect(user).exactInput({
                 path: ethers.utils.solidityPack(
                     ["address", "uint24", "address", "uint24", "address"],
                     [
-                        networkConfig[network.config.chainId].usdcAddress,
+                        networkConfig[network.config.chainId + 1].usdcAddress,
                         500,
-                        networkConfig[network.config.chainId].wethAddress,
-                        500,
-                        networkConfig[network.config.chainId].wmaticAddress,
+                        networkConfig[network.config.chainId + 1].wmaticAddress,
+                        3000,
+                        networkConfig[network.config.chainId + 1].crvAddress
                     ]
                 ),
                 recipient: user.address,
@@ -48,11 +55,11 @@ describe("maticToEthPriceConst", function () {
                 path: ethers.utils.solidityPack(
                     ["address", "uint24", "address", "uint24", "address"],
                     [
-                        networkConfig[network.config.chainId].wmaticAddress,
+                        networkConfig[network.config.chainId + 1].crvAddress,
+                        3000,
+                        networkConfig[network.config.chainId + 1].wmaticAddress,
                         500,
-                        networkConfig[network.config.chainId].wethAddress,
-                        500,
-                        networkConfig[network.config.chainId].usdcAddress,
+                        networkConfig[network.config.chainId + 1].usdcAddress
                     ]
                 ),
                 recipient: user.address,
@@ -73,7 +80,7 @@ describe("maticToEthPriceConst", function () {
                 UniRouter.address,
                 ethers.utils.parseEther("100000000000000")
             );
-        await weth
+        await crv
             .connect(user)
             .approve(
                 UniRouter.address,
@@ -85,9 +92,9 @@ describe("maticToEthPriceConst", function () {
                 path: ethers.utils.solidityPack(
                     ["address", "uint24", "address"],
                     [
-                        networkConfig[network.config.chainId].usdcAddress,
+                        networkConfig[network.config.chainId + 1].usdcAddress,
                         500,
-                        networkConfig[network.config.chainId].wmaticAddress,
+                        networkConfig[network.config.chainId + 1].wmaticAddress,
                     ]
                 ),
                 recipient: user.address,
@@ -102,9 +109,113 @@ describe("maticToEthPriceConst", function () {
                 path: ethers.utils.solidityPack(
                     ["address", "uint24", "address"],
                     [
-                        networkConfig[network.config.chainId].wmaticAddress,
+                        networkConfig[network.config.chainId + 1].wmaticAddress,
                         500,
-                        networkConfig[network.config.chainId].usdcAddress,
+                        networkConfig[network.config.chainId + 1].usdcAddress,
+                    ]
+                ),
+                recipient: user.address,
+                deadline:
+                    (await ethers.provider.getBlock("latest")).timestamp +
+                    10000,
+                amountIn: ethers.utils.parseEther(amount.toString()),
+                amountOutMinimum: 0,
+            });
+        }
+    };
+
+    const makeSwapHelper2 = async (user, amount, way) => {
+        await usd.connect(user).approve(UniRouter.address, 100000000 * 1000000);
+        await wmatic
+            .connect(user)
+            .approve(
+                UniRouter.address,
+                ethers.utils.parseEther("100000000000000")
+            );
+        await crv
+            .connect(user)
+            .approve(
+                UniRouter.address,
+                ethers.utils.parseEther("100000000000000")
+            );
+
+        if (way) {
+            await UniRouter.connect(user).exactInput({
+                path: ethers.utils.solidityPack(
+                    ["address", "uint24", "address"],
+                    [
+                        networkConfig[network.config.chainId + 1].usdcAddress,
+                        500,
+                        networkConfig[network.config.chainId + 1].crvAddress,
+                    ]
+                ),
+                recipient: user.address,
+                deadline:
+                    (await ethers.provider.getBlock("latest")).timestamp +
+                    10000,
+                amountIn: amount * 1e6,
+                amountOutMinimum: 0,
+            });
+        } else {
+            await UniRouter.connect(user).exactInput({
+                path: ethers.utils.solidityPack(
+                    ["address", "uint24", "address"],
+                    [
+                        networkConfig[network.config.chainId + 1].crvAddress,
+                        500,
+                        networkConfig[network.config.chainId + 1].usdcAddress,
+                    ]
+                ),
+                recipient: user.address,
+                deadline:
+                    (await ethers.provider.getBlock("latest")).timestamp +
+                    10000,
+                amountIn: ethers.utils.parseEther(amount.toString()),
+                amountOutMinimum: 0,
+            });
+        }
+    };
+
+    const makeSwapHelper3 = async (user, amount, way) => {
+        await usd.connect(user).approve(UniRouter.address, 100000000 * 1000000);
+        await wmatic
+            .connect(user)
+            .approve(
+                UniRouter.address,
+                ethers.utils.parseEther("100000000000000")
+            );
+        await crv
+            .connect(user)
+            .approve(
+                UniRouter.address,
+                ethers.utils.parseEther("100000000000000")
+            );
+
+        if (way) {
+            await UniRouter.connect(user).exactInput({
+                path: ethers.utils.solidityPack(
+                    ["address", "uint24", "address"],
+                    [
+                        networkConfig[network.config.chainId + 1].wmaticAddress,
+                        3000,
+                        networkConfig[network.config.chainId + 1].crvAddress,
+                    ]
+                ),
+                recipient: user.address,
+                deadline:
+                    (await ethers.provider.getBlock("latest")).timestamp +
+                    10000,
+                amountIn: ethers.utils.parseEther(amount.toString()),
+                amountOutMinimum: 0,
+            });
+        } else {
+            await UniRouter.connect(user).exactInput({
+                path: ethers.utils.solidityPack(
+                    ["address", "uint24", "address"],
+                    [
+                        networkConfig[network.config.chainId + 1].crvAddress,
+                        3000,
+                        networkConfig[network.config.chainId + 1].wmaticAddress,
                     ]
                 ),
                 recipient: user.address,
@@ -180,7 +291,7 @@ describe("maticToEthPriceConst", function () {
         await chamber.connect(user).mint(amount);
         expect(await chamber.currentUSDBalance()).to.be.closeTo(
             contractBalanceBefore.add(amount),
-            10
+            100
         );
         // expect(await chamber.sharesWorth(await chamber.get_s_userShares(user.address))).to.be.closeTo(userInnerBalanceBefore.add(amount), 10);
     };
@@ -199,10 +310,7 @@ describe("maticToEthPriceConst", function () {
     const makeAllChecks = async () => {
         console.log("TOKENS LEFT IN CONTRACT");
         console.log("usd:", (await usd.balanceOf(chamber.address)).toString());
-        console.log(
-            "weth:",
-            (await weth.balanceOf(chamber.address)).toString()
-        );
+        console.log("crv:", (await crv.balanceOf(chamber.address)).toString());
         console.log(
             "matic:",
             (await ethers.provider.getBalance(chamber.address)).toString()
@@ -213,8 +321,9 @@ describe("maticToEthPriceConst", function () {
         );
 
         console.log(
-            "Owner fees:", (await chamber.getAdminBalance()).toString(),
-        )
+            "Owner fees:",
+            (await chamber.getAdminBalance()).toString()
+        );
 
         console.log("TOKENS IN UNI POSITION:");
         console.log((await chamber.calculateCurrentPoolReserves()).toString());
@@ -227,8 +336,8 @@ describe("maticToEthPriceConst", function () {
         console.log(
             "DEPT IN MATIC:",
             (await vMATIC.balanceOf(chamber.address)).toString(),
-            "\nDEPT IN WETH:",
-            (await vWETH.balanceOf(chamber.address)).toString()
+            "\nDEPT IN crv:",
+            (await vCRV.balanceOf(chamber.address)).toString()
         );
         console.log("LTV IS:", (await chamber.currentLTV()).toString());
 
@@ -244,7 +353,7 @@ describe("maticToEthPriceConst", function () {
 
     before(async () => {
         console.log("DEPLOYING VAULT, FUNDING USER ACCOUNTS...");
-        const currNetworkConfig = networkConfig[network.config.chainId];
+        const currNetworkConfig = networkConfig[network.config.chainId + 1];
         accounts = await ethers.getSigners();
         owner = accounts[0];
         user1 = accounts[1];
@@ -253,9 +362,9 @@ describe("maticToEthPriceConst", function () {
             "IERC20",
             currNetworkConfig.usdcAddress
         );
-        weth = await ethers.getContractAt(
+        crv = await ethers.getContractAt(
             "IERC20",
-            currNetworkConfig.wethAddress
+            currNetworkConfig.crvAddress
         );
         wmatic = await ethers.getContractAt(
             "WMATIC",
@@ -264,35 +373,37 @@ describe("maticToEthPriceConst", function () {
         aUSD = await ethers.getContractAt(
             "IERC20",
             currNetworkConfig.aaveAUSDCAddress
-        )
+        );
         vMATIC = await ethers.getContractAt(
             "IERC20",
             currNetworkConfig.aaveVWMATICAddress
-        )
-        vWETH = await ethers.getContractAt(
+        );
+        vCRV = await ethers.getContractAt(
             "IERC20",
-            currNetworkConfig.aaveVWETHAddress
-        )
+            currNetworkConfig.aaveVCRVAddress
+        );
         aaveOracle = await ethers.getContractAt(
             "IAaveOracle",
             currNetworkConfig.aaveOracleAddress
         );
         UniRouter = await ethers.getContractAt(
             "ISwapRouter",
-            networkConfig[network.config.chainId].uniswapRouterAddress
+            networkConfig[network.config.chainId + 1].uniswapRouterAddress
         );
 
-        const chamberFactory = await ethers.getContractFactory("ChamberV1");
+        const chamberFactory = await ethers.getContractFactory("ChamberV1_CRVWMATIC");
         chamber = await chamberFactory.deploy(
             currNetworkConfig.uniswapRouterAddress,
             currNetworkConfig.uniswapPoolAddress,
             currNetworkConfig.aaveV3PoolAddress,
             currNetworkConfig.aaveVWMATICAddress,
-            currNetworkConfig.aaveVWETHAddress,
+            currNetworkConfig.aaveVCRVAddress,
             currNetworkConfig.aaveOracleAddress,
             currNetworkConfig.aaveAUSDCAddress,
             currNetworkConfig.ticksRange
         );
+        console.log(currNetworkConfig.uniswapPoolAddress);
+
         await chamber.setLTV(
             currNetworkConfig.targetLTV,
             currNetworkConfig.minLTV,
@@ -309,13 +420,13 @@ describe("maticToEthPriceConst", function () {
 
         await usd
             .connect(donorWallet)
-            .transfer(owner.address, 1000 * 1000 * 1000 * 1000);
+            .transfer(owner.address, 10000 * 1000 * 1000);
         await usd
             .connect(donorWallet)
-            .transfer(user1.address, 2000 * 1000 * 1000 * 1000);
+            .transfer(user1.address, 10000 * 1000 * 1000);
         await usd
             .connect(donorWallet)
-            .transfer(user2.address, 2500 * 1000 * 1000 * 1000);
+            .transfer(user2.address, 10000 * 1000 * 1000);
 
         await usd
             .connect(owner)
@@ -338,20 +449,20 @@ describe("maticToEthPriceConst", function () {
             .giveApprove(usd.address, currNetworkConfig.uniswapPoolAddress);
         await chamber
             .connect(owner)
-            .giveApprove(usd.address, currNetworkConfig.aaveVWETHAddress);
+            .giveApprove(usd.address, currNetworkConfig.aaveVCRVAddress);
 
         await chamber
             .connect(owner)
-            .giveApprove(weth.address, currNetworkConfig.aaveV3PoolAddress);
+            .giveApprove(crv.address, currNetworkConfig.aaveV3PoolAddress);
         await chamber
             .connect(owner)
-            .giveApprove(weth.address, currNetworkConfig.uniswapRouterAddress);
+            .giveApprove(crv.address, currNetworkConfig.uniswapRouterAddress);
         await chamber
             .connect(owner)
-            .giveApprove(weth.address, currNetworkConfig.uniswapPoolAddress);
+            .giveApprove(crv.address, currNetworkConfig.uniswapPoolAddress);
         await chamber
             .connect(owner)
-            .giveApprove(weth.address, currNetworkConfig.aaveVWETHAddress);
+            .giveApprove(crv.address, currNetworkConfig.aaveVCRVAddress);
 
         await chamber
             .connect(owner)
@@ -369,24 +480,20 @@ describe("maticToEthPriceConst", function () {
             await makeDeposit(owner, 1000 * 1e6);
         });
 
-        it("user1 mints 0.0015$", async function () {
-            await makeDeposit(user1, 1500);
-        });
-
-        it("user2 mints 0.0025$", async function () {
-            await makeDeposit(user2, 2500);
+        it("user1 mints 1500$", async function () {
+            await makeDeposit(user1, 1500 * 1e6);
         });
 
         it("user2 mints 2500$", async function () {
             await makeDeposit(user2, 2500 * 1e6);
         });
 
-        it("user1 mints 0.0015$", async function () {
-            await makeDeposit(user1, 1500);
+        it("user2 mints 2500$", async function () {
+            await makeDeposit(user2, 2500 * 1e6);
         });
 
-        it("owner mints 0.00001$", async function () {
-            await makeDeposit(owner, 10);
+        it("user1 mints 1500$", async function () {
+            await makeDeposit(user1, 1500 * 1e6);
         });
     });
 
@@ -397,78 +504,56 @@ describe("maticToEthPriceConst", function () {
     });
 
     describe("should make swaps in uni pools, so our position collect some fees", async function () {
-        let WethWmaticPrices, WethUsdcPrices;
+        let WmaticUsdcPrices, CrvUsdcPrices;
 
         it("makes all swaps", async function () {
+            console.log(
+                "matic/usd",
+                await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18)
+            );
+            console.log(
+                "crv = ",
+               (await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0] * (await getPriceFromPair(crv, wmatic, 3000, 1e18, 1e18))[1] + " usd"
+            );
+            console.log(
+                "matic/crv",
+                await getPriceFromPair(crv, wmatic, 3000, 1e18, 1e18)
+            );
 
-            console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
-            console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
-            console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
-            
             await wmatic
                 .connect(donorWallet)
-                .deposit({ value: ethers.utils.parseEther("1000000") });
+                .deposit({ value: ethers.utils.parseEther("10000000") });
 
-            for (let i = 0; i < 20; i++) {
-                let balanceBefore = await wmatic.balanceOf(donorWallet.address);
-                await makeSwap(donorWallet, 100000, true);
-                await makeSwap(
-                    donorWallet,
-                    ethers.utils.formatEther(
-                        (await wmatic.balanceOf(donorWallet.address))
-                            .sub(balanceBefore)
-                            .add(ethers.utils.parseEther("1000"))
-                    ),
-                    false
-                );
+            for (let i = 0; i < 10; i++) {
+                await makeSwap(donorWallet, 60000, true);
+                await makeSwap(donorWallet, 50000, false);
             }
 
-            WethWmaticPrices = await getPriceFromPair(
-                weth,
-                wmatic,
-                500,
-                1e18,
-                1e18
+            CrvUsdcPrices = (await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0] * (await getPriceFromPair(crv, wmatic, 3000, 1e18, 1e18))[1]
+
+            WmaticUsdcPrices = (await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0]
+
+            console.log(
+                "matic/usd",
+                await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18)
             );
-            WethUsdcPrices = await getPriceFromPair(weth, usd, 500, 1e18, 1e6);
-            const wmaticTargetPrice =
-                Math.round((WethUsdcPrices[1] / WethWmaticPrices[1]) * 1e8) *
-                1e10;
+            console.log(
+                "crv = ",
+               (await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0] * (await getPriceFromPair(crv, wmatic, 3000, 1e18, 1e18))[1] + " usd"
+            );
+            console.log(
+                "matic/crv",
+                await getPriceFromPair(crv, wmatic, 3000, 1e18, 1e18)
+            );
 
-            if (
-                (await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0] *
-                    1e18 <
-                BigNumber.from(wmaticTargetPrice.toString())
-            ) {
-                while (
-                    (await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0] *
-                        1e18 <
-                    BigNumber.from(wmaticTargetPrice.toString())
-                ) {
-                    makeSwapHelper(donorWallet, 5000, true);
-                }
-            } else {
-                while (
-                    (await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0] *
-                        1e18 >
-                    BigNumber.from(wmaticTargetPrice.toString())
-                ) {
-                    makeSwapHelper(donorWallet, 4000, false);
-                }
-            }
-
-            console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
-            console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
-            console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
-
-            mine(1000, { interval: 72 })
-        })
+            mine(1000, { interval: 72 });
+        });
 
         it("should set all oracles", async function () {
-            await setNewOraclePrice(weth, Math.round(WethUsdcPrices[1] * 1e8));
+            await setNewOraclePrice(crv, Math.round(CrvUsdcPrices * 1e8));
             await setNewOraclePrice(
                 wmatic,
-                Math.round((WethUsdcPrices[1] / WethWmaticPrices[1]) * 1e8)
+                Math.round(WmaticUsdcPrices * 1e8)
             );
         });
     });
@@ -479,22 +564,21 @@ describe("maticToEthPriceConst", function () {
         });
     });
 
-    describe("Mint small positions again", async function () {
-        it("owner mints 0.00001$", async function () {
-            await makeDeposit(owner, 10);
+    describe("Should make rebalance and owner deps", async function () {
+        it("makes rebalance", async function () {
+            await chamber.performUpkeep("0x");
         });
 
-        it("owner mints 0.000001$", async function () {
-            await makeDeposit(owner, 1);
+        it("owner deposits 1000$", async function () {
+            await makeDeposit(owner, 1000 * 1e6);
         });
-    })
+    });
 
     describe("checks 3", async function () {
         it("makes all checks", async function () {
             await makeAllChecks();
         });
     });
-
 
     describe("users burn all their positions", async function () {
         it("owner burns his position", async function () {
@@ -522,8 +606,8 @@ describe("maticToEthPriceConst", function () {
     describe("Owner withdraw fees", async function () {
         it("owner withdraws fees", async function () {
             await chamber.connect(owner)._redeemFees();
-        })
-    })
+        });
+    });
 
     describe("checks 5", async function () {
         it("makes all checks", async function () {

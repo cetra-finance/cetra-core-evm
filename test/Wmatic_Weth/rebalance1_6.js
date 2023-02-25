@@ -1,7 +1,7 @@
 const { expect, assert } = require("chai");
 const { BigNumber, utils } = require("ethers");
 const { ethers, upgrades } = require("hardhat");
-const { networkConfig } = require("../helper-hardhat-config");
+const { networkConfig } = require("../../helper-hardhat-config");
 const helpers = require("@nomicfoundation/hardhat-network-helpers");
 const { mine } = require("@nomicfoundation/hardhat-network-helpers");
 const JSBI = require("jsbi");

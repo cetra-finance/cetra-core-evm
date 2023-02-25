@@ -1,12 +1,12 @@
 const { expect, assert } = require("chai");
 const { BigNumber, utils } = require("ethers");
 const { ethers, upgrades } = require("hardhat");
-const { networkConfig } = require("../helper-hardhat-config");
+const { networkConfig } = require("../../helper-hardhat-config");
 const helpers = require("@nomicfoundation/hardhat-network-helpers");
 const { mine } = require("@nomicfoundation/hardhat-network-helpers");
 const JSBI = require("jsbi");
 
-describe("maticToEthPriceFall", function () {
+describe("Basic tests new", function () {
     let owner, _, user1, user2, donorWallet;
     let usd, weth, aUSD, vMATIC, vWETH;
     let aaveOracle, UniRouter;
@@ -105,6 +105,110 @@ describe("maticToEthPriceFall", function () {
                         networkConfig[network.config.chainId].wmaticAddress,
                         500,
                         networkConfig[network.config.chainId].usdcAddress,
+                    ]
+                ),
+                recipient: user.address,
+                deadline:
+                    (await ethers.provider.getBlock("latest")).timestamp +
+                    10000,
+                amountIn: ethers.utils.parseEther(amount.toString()),
+                amountOutMinimum: 0,
+            });
+        }
+    };
+
+    const makeSwapHelper2 = async (user, amount, way) => {
+        await usd.connect(user).approve(UniRouter.address, 100000000 * 1000000);
+        await wmatic
+            .connect(user)
+            .approve(
+                UniRouter.address,
+                ethers.utils.parseEther("100000000000000")
+            );
+        await weth
+            .connect(user)
+            .approve(
+                UniRouter.address,
+                ethers.utils.parseEther("100000000000000")
+            );
+
+        if (way) {
+            await UniRouter.connect(user).exactInput({
+                path: ethers.utils.solidityPack(
+                    ["address", "uint24", "address"],
+                    [
+                        networkConfig[network.config.chainId].usdcAddress,
+                        500,
+                        networkConfig[network.config.chainId].wethAddress,
+                    ]
+                ),
+                recipient: user.address,
+                deadline:
+                    (await ethers.provider.getBlock("latest")).timestamp +
+                    10000,
+                amountIn: amount * 1e6,
+                amountOutMinimum: 0,
+            });
+        } else {
+            await UniRouter.connect(user).exactInput({
+                path: ethers.utils.solidityPack(
+                    ["address", "uint24", "address"],
+                    [
+                        networkConfig[network.config.chainId].wethAddress,
+                        500,
+                        networkConfig[network.config.chainId].usdcAddress,
+                    ]
+                ),
+                recipient: user.address,
+                deadline:
+                    (await ethers.provider.getBlock("latest")).timestamp +
+                    10000,
+                amountIn: ethers.utils.parseEther(amount.toString()),
+                amountOutMinimum: 0,
+            });
+        }
+    };
+
+    const makeSwapHelper3 = async (user, amount, way) => {
+        await usd.connect(user).approve(UniRouter.address, 100000000 * 1000000);
+        await wmatic
+            .connect(user)
+            .approve(
+                UniRouter.address,
+                ethers.utils.parseEther("100000000000000")
+            );
+        await weth
+            .connect(user)
+            .approve(
+                UniRouter.address,
+                ethers.utils.parseEther("100000000000000")
+            );
+
+        if (way) {
+            await UniRouter.connect(user).exactInput({
+                path: ethers.utils.solidityPack(
+                    ["address", "uint24", "address"],
+                    [
+                        networkConfig[network.config.chainId].wmaticAddress,
+                        500,
+                        networkConfig[network.config.chainId].wethAddress,
+                    ]
+                ),
+                recipient: user.address,
+                deadline:
+                    (await ethers.provider.getBlock("latest")).timestamp +
+                    10000,
+                amountIn: ethers.utils.parseEther(amount.toString()),
+                amountOutMinimum: 0,
+            });
+        } else {
+            await UniRouter.connect(user).exactInput({
+                path: ethers.utils.solidityPack(
+                    ["address", "uint24", "address"],
+                    [
+                        networkConfig[network.config.chainId].wethAddress,
+                        500,
+                        networkConfig[network.config.chainId].wmaticAddress,
                     ]
                 ),
                 recipient: user.address,
@@ -411,21 +515,14 @@ describe("maticToEthPriceFall", function () {
 
             await wmatic
                 .connect(donorWallet)
-                .deposit({ value: ethers.utils.parseEther("1000000") });
+                .deposit({ value: ethers.utils.parseEther("10000000") });
 
-            for (let i = 0; i < 20; i++) {
-                let balanceBefore = await wmatic.balanceOf(donorWallet.address);
-                await makeSwap(donorWallet, 100000, true);
-                await makeSwap(
-                    donorWallet,
-                    ethers.utils.formatEther(
-                        (
-                            await wmatic.balanceOf(donorWallet.address)
-                        ).sub(balanceBefore)
-                    ),
-                    false
-                );
+            for (let i = 0; i < 10; i++) {
+                await makeSwap(donorWallet, 70000, true);
+                await makeSwap(donorWallet, 50000, false);
             }
+
+            await makeSwapHelper3(donorWallet, 50000, true);
 
             WethWmaticPrices = await getPriceFromPair(
                 weth,

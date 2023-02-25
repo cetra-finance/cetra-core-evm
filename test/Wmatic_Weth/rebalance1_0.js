@@ -1,19 +1,15 @@
 const { expect, assert } = require("chai");
 const { BigNumber, utils } = require("ethers");
 const { ethers, upgrades } = require("hardhat");
-const { networkConfig } = require("../helper-hardhat-config");
+const { networkConfig } = require("../../helper-hardhat-config");
 const helpers = require("@nomicfoundation/hardhat-network-helpers");
 const { mine } = require("@nomicfoundation/hardhat-network-helpers");
 const JSBI = require("jsbi");
 
-describe("maticToEthPriceConst", function () {
+describe("Basic tests new1", function () {
     let owner, _, user1, user2, donorWallet;
-    let usd, weth, aUSD, vMATIC, vWETH;
+    let usd, weth;
     let aaveOracle, UniRouter;
-
-    // =================================
-    // Helper functions
-    // =================================
 
     const makeSwap = async (user, amount, way) => {
         await usd.connect(user).approve(UniRouter.address, 100000000 * 1000000);
@@ -102,7 +98,7 @@ describe("maticToEthPriceConst", function () {
                 path: ethers.utils.solidityPack(
                     ["address", "uint24", "address"],
                     [
-                        networkConfig[network.config.chainId].wmaticAddress,
+                        networkConfig[network.config.chainId].wethAddress,
                         500,
                         networkConfig[network.config.chainId].usdcAddress,
                     ]
@@ -170,78 +166,6 @@ describe("maticToEthPriceConst", function () {
         return [token0Price, token1Price];
     };
 
-    // =================================
-    // Main functions
-    // =================================
-
-    const makeDeposit = async (user, amount) => {
-        const contractBalanceBefore = await chamber.currentUSDBalance();
-        // const userInnerBalanceBefore = await chamber.sharesWorth(await chamber.get_s_userShares(user.address));
-        await chamber.connect(user).mint(amount);
-        expect(await chamber.currentUSDBalance()).to.be.closeTo(
-            contractBalanceBefore.add(amount),
-            10
-        );
-        // expect(await chamber.sharesWorth(await chamber.get_s_userShares(user.address))).to.be.closeTo(userInnerBalanceBefore.add(amount), 10);
-    };
-
-    const makeBurn = async (user, amount) => {
-        const userUsdBalanceBefore = await usd.balanceOf(user.address);
-        await chamber.connect(user).burn(amount);
-        console.log(
-            "user balance diff",
-            (await usd.balanceOf(user.address))
-                .sub(userUsdBalanceBefore)
-                .toString()
-        );
-    };
-
-    const makeAllChecks = async () => {
-        console.log("TOKENS LEFT IN CONTRACT");
-        console.log("usd:", (await usd.balanceOf(chamber.address)).toString());
-        console.log(
-            "weth:",
-            (await weth.balanceOf(chamber.address)).toString()
-        );
-        console.log(
-            "matic:",
-            (await ethers.provider.getBalance(chamber.address)).toString()
-        );
-        console.log(
-            "wmatic:",
-            (await wmatic.balanceOf(chamber.address)).toString()
-        );
-
-        console.log(
-            "Owner fees:", (await chamber.getAdminBalance()).toString(),
-        )
-
-        console.log("TOKENS IN UNI POSITION:");
-        console.log((await chamber.calculateCurrentPoolReserves()).toString());
-        console.log("TOKENS IN AAVE POSITION");
-        console.log(
-            "COLLATERAL TOKENS ($):",
-            (await aUSD.balanceOf(chamber.address)).toString()
-        );
-        console.log("DEBT TOKENS:");
-        console.log(
-            "DEPT IN MATIC:",
-            (await vMATIC.balanceOf(chamber.address)).toString(),
-            "\nDEPT IN WETH:",
-            (await vWETH.balanceOf(chamber.address)).toString()
-        );
-        console.log("LTV IS:", (await chamber.currentLTV()).toString());
-
-        console.log(
-            "TOTAL USD BALANCE:",
-            (await chamber.currentUSDBalance()).toString()
-        );
-    };
-
-    // =================================
-    // Main tests
-    // =================================
-
     before(async () => {
         console.log("DEPLOYING VAULT, FUNDING USER ACCOUNTS...");
         const currNetworkConfig = networkConfig[network.config.chainId];
@@ -258,21 +182,9 @@ describe("maticToEthPriceConst", function () {
             currNetworkConfig.wethAddress
         );
         wmatic = await ethers.getContractAt(
-            "WMATIC",
+            "IERC20",
             currNetworkConfig.wmaticAddress
         );
-        aUSD = await ethers.getContractAt(
-            "IERC20",
-            currNetworkConfig.aaveAUSDCAddress
-        )
-        vMATIC = await ethers.getContractAt(
-            "IERC20",
-            currNetworkConfig.aaveVWMATICAddress
-        )
-        vWETH = await ethers.getContractAt(
-            "IERC20",
-            currNetworkConfig.aaveVWETHAddress
-        )
         aaveOracle = await ethers.getContractAt(
             "IAaveOracle",
             currNetworkConfig.aaveOracleAddress
@@ -286,12 +198,12 @@ describe("maticToEthPriceConst", function () {
         chamber = await chamberFactory.deploy(
             currNetworkConfig.uniswapRouterAddress,
             currNetworkConfig.uniswapPoolAddress,
+            currNetworkConfig.aaveWTG3Address,
             currNetworkConfig.aaveV3PoolAddress,
-            currNetworkConfig.aaveVWMATICAddress,
             currNetworkConfig.aaveVWETHAddress,
+            currNetworkConfig.aaveVWMATICAddress,
             currNetworkConfig.aaveOracleAddress,
-            currNetworkConfig.aaveAUSDCAddress,
-            currNetworkConfig.ticksRange
+            currNetworkConfig.aaveAUSDCAddress
         );
         await chamber.setLTV(
             currNetworkConfig.targetLTV,
@@ -362,151 +274,193 @@ describe("maticToEthPriceConst", function () {
                 wmatic.address,
                 currNetworkConfig.uniswapRouterAddress
             );
+
+        console.log(`Owner's address is ${owner.address}`);
+        console.log(
+            "--------------------------------------------------------------------"
+        );
     });
 
-    describe("every user mints", async function () {
-        it("owner mints 1000$", async function () {
-            await makeDeposit(owner, 1000 * 1e6);
-        });
+    it("full circuit of mints", async function () {
+        console.log("OWNER DEPOSITS 1000$");
+        await chamber.connect(owner).mint(1000 * 1000 * 1000);
+        console.log("LTV IS");
+        console.log(await chamber.currentLTV());
+        console.log("IN POOL");
+        console.log(await chamber.calculateCurrentPoolReserves());
 
-        it("user1 mints 1500$", async function () {
-            await makeDeposit(user1, 1500 * 1e6);
-        });
+        console.log("DEBT TOKENS ");
+        console.log(
+            await chamber.getVWMATICTokenBalance(),
+            await chamber.getVWETHTokenBalance()
+        );
+        console.log("TOTAL USD BALANCE");
+        console.log(await chamber.currentUSDBalance());
 
-        it("user2 mints 2500$", async function () {
-            await makeDeposit(user2, 2500 * 1e6);
-        });
+        console.log("USER1 DEPOSITS 1500$");
+        await chamber.connect(user1).mint(1500 * 1000 * 1000);
+        console.log("LTV IS");
+        console.log(await chamber.currentLTV());
+        console.log("IN POOL");
+        console.log(await chamber.calculateCurrentPoolReserves());
 
-        it("user2 mints 2500$", async function () {
-            await makeDeposit(user2, 2500 * 1e6);
-        });
+        console.log("DEBT TOKENS ");
+        console.log(
+            await chamber.getVWMATICTokenBalance(),
+            await chamber.getVWETHTokenBalance()
+        );
+        console.log("TOTAL USD BALANCE");
+        console.log(await chamber.currentUSDBalance());
 
-        it("user1 mints 1500$", async function () {
-            await makeDeposit(user1, 1500 * 1e6);
-        });
-    });
+        console.log("USER2 DEPOSITS 2500$");
+        await chamber.connect(user2).mint(2500 * 1000 * 1000);
+        console.log("LTV IS");
+        console.log(await chamber.currentLTV());
+        console.log("USER2 DEPOSITS 2500$");
+        await chamber.connect(user2).mint(2500 * 1000 * 1000);
+        console.log("LTV IS");
+        console.log(await chamber.currentLTV());
+        console.log("USER1 DEPOSITS 1500$");
+        await chamber.connect(user1).mint(1500 * 1000 * 1000);
+        console.log("LTV IS");
+        console.log(await chamber.currentLTV());
 
-    describe("checks 1", async function () {
-        it("makes all checks", async function () {
-            await makeAllChecks();
-        });
-    });
+        console.log(
+            `Total amount of shares minted is ${await chamber.get_s_totalShares()}`
+        );
+        console.log("BALANCE AND SHARESWORTH OF OWNER are");
+        console.log(await chamber.get_s_userShares(owner.address));
+        console.log(
+            await chamber.sharesWorth(await chamber.get_s_userShares(owner.address))
+        );
+        console.log("BALANCE AND SHARESWORTH OF USER1 are");
+        console.log(await chamber.get_s_userShares(user1.address));
+        console.log(
+            await chamber.sharesWorth(await chamber.get_s_userShares(user1.address))
+        );
+        console.log("BALANCE AND SHARESWORTH OF USER2 are");
+        console.log(await chamber.get_s_userShares(user2.address));
+        console.log(
+            await chamber.sharesWorth(await chamber.get_s_userShares(user2.address))
+        );
+        console.log("TOKENS LEFT IN CONTRACT");
+        console.log("usd", await usd.balanceOf(chamber.address));
+        console.log("weth", await weth.balanceOf(chamber.address));
+        console.log("matic", await ethers.provider.getBalance(chamber.address));
+        console.log("wmatic", await wmatic.balanceOf(chamber.address));
+        console.log("TOKENS IN UNI POSITION");
+        console.log(await chamber.calculateCurrentPoolReserves());
+        console.log("TOKENS IN AAVE POSITION");
+        console.log("COLLATERAL TOKENS ");
+        console.log(await chamber.getAUSDCTokenBalance());
+        console.log("DEBT TOKENS ");
+        console.log(
+            await chamber.getVWMATICTokenBalance(),
+            await chamber.getVWETHTokenBalance()
+        );
+        console.log("LTV IS");
+        console.log(await chamber.currentLTV());
 
-    describe("should make swaps in uni pools, so our position collect some fees", async function () {
-        let WethWmaticPrices, WethUsdcPrices;
+        console.log("TOTAL USD BALANCE");
+        console.log(await chamber.currentUSDBalance());
 
-        it("makes all swaps", async function () {
-
-            console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
-            console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
-            console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
-            
-            await wmatic
-                .connect(donorWallet)
-                .deposit({ value: ethers.utils.parseEther("1000000") });
-
-            for (let i = 0; i < 20; i++) {
-                let balanceBefore = await wmatic.balanceOf(donorWallet.address);
-                await makeSwap(donorWallet, 100000, true);
-                await makeSwap(
-                    donorWallet,
-                    ethers.utils.formatEther(
-                        (await wmatic.balanceOf(donorWallet.address))
-                            .sub(balanceBefore)
-                            .add(ethers.utils.parseEther("1000"))
-                    ),
-                    false
-                );
-            }
-
-            WethWmaticPrices = await getPriceFromPair(
-                weth,
-                wmatic,
-                500,
-                1e18,
-                1e18
+        for (let i = 0; i < 20; i++) {
+            await makeSwap(donorWallet, 100000, true);
+            await makeSwap(
+                donorWallet,
+                ethers.utils.formatEther(
+                    await wmatic.balanceOf(donorWallet.address)
+                ),
+                false
             );
-            WethUsdcPrices = await getPriceFromPair(weth, usd, 500, 1e18, 1e6);
-            const wmaticTargetPrice =
-                Math.round((WethUsdcPrices[1] / WethWmaticPrices[1]) * 1e8) *
-                1e10;
+        }
+        makeSwapHelper(donorWallet, 10000, true);
+        console.log(await getPriceFromPair(weth, usd, 500, 1e18, 1e6));
+        console.log(await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18));
+        console.log(await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18));
+        console.log(await chamber.calculateCurrentPoolReserves());
+        mine(1000, { interval: 72 });
 
-            if (
-                (await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0] *
-                    1e18 <
-                BigNumber.from(wmaticTargetPrice.toString())
-            ) {
-                while (
-                    (await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0] *
-                        1e18 <
-                    BigNumber.from(wmaticTargetPrice.toString())
-                ) {
-                    makeSwapHelper(donorWallet, 5000, true);
-                }
-            } else {
-                while (
-                    (await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0] *
-                        1e18 >
-                    BigNumber.from(wmaticTargetPrice.toString())
-                ) {
-                    makeSwapHelper(donorWallet, 4000, false);
-                }
-            }
+        const WethWmaticPrices = await getPriceFromPair(
+            weth,
+            wmatic,
+            500,
+            1e18,
+            1e18
+        );
+        const WethUsdcPrices = await getPriceFromPair(
+            weth,
+            usd,
+            500,
+            1e18,
+            1e6
+        );
+        await setNewOraclePrice(weth, Math.round(WethUsdcPrices[1] * 1e8));
+        await setNewOraclePrice(
+            wmatic,
+            Math.round((WethUsdcPrices[1] / WethWmaticPrices[1]) * 1e8)
+        );
 
-            console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
-            console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
-            console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
+        console.log(await chamber.getUsdcOraclePrice());
+        console.log(await chamber.getWmaticOraclePrice());
+        console.log(await chamber.getWethOraclePrice());
 
-            mine(1000, { interval: 72 })
-        })
-
-        it("should set all oracles", async function () {
-            await setNewOraclePrice(weth, Math.round(WethUsdcPrices[1] * 1e8));
-            await setNewOraclePrice(
-                wmatic,
-                Math.round((WethUsdcPrices[1] / WethWmaticPrices[1]) * 1e8)
-            );
-        });
+        console.log("TOTAL USD BALANCE");
+        console.log(await chamber.currentUSDBalance());
+        console.log("-----------------------------------------------------");
     });
 
-    describe("checks 2", async function () {
-        it("makes all checks", async function () {
-            await makeAllChecks();
-        });
-    });
+    it("full circuit of withdrawals", async function () {
+        const ownerUsdBalanceBefore = await usd.balanceOf(owner.address);
+        await chamber
+            .connect(owner)
+            .burn(await chamber.get_s_userShares(owner.address));
+        console.log(
+            "owner balance diff",
+            (await usd.balanceOf(owner.address)).sub(ownerUsdBalanceBefore)
+        );
 
-    describe("users burn all their positions", async function () {
-        it("owner burns his position", async function () {
-            const toBurn = await chamber.get_s_userShares(owner.address);
-            await makeBurn(owner, toBurn);
-        });
+        const user1UsdBalanceBefore = await usd.balanceOf(user1.address);
 
-        it("user1 burns his position", async function () {
-            const toBurn = await chamber.get_s_userShares(user1.address);
-            await makeBurn(user1, toBurn);
-        });
+        await chamber
+            .connect(user1)
+            .burn(await chamber.get_s_userShares(user1.address));
+        console.log(
+            "user1 balance diff",
+            (await usd.balanceOf(user1.address)).sub(user1UsdBalanceBefore)
+        );
 
-        it("user2 burns his position", async function () {
-            const toBurn = await chamber.get_s_userShares(user2.address);
-            await makeBurn(user2, toBurn);
-        });
-    });
+        const user2UsdBalanceBefore = await usd.balanceOf(user2.address);
+        await chamber
+            .connect(user2)
+            .burn(await chamber.get_s_userShares(user2.address));
+        console.log(
+            "user2 balance diff",
+            (await usd.balanceOf(user2.address)).sub(user2UsdBalanceBefore)
+        );
 
-    describe("checks 3", async function () {
-        it("makes all checks", async function () {
-            await makeAllChecks();
-        });
-    });
+        console.log("TOKENS LEFT IN CONTRACT");
+        console.log("usd", await usd.balanceOf(chamber.address));
+        console.log("weth", await weth.balanceOf(chamber.address));
+        console.log("matic", await ethers.provider.getBalance(chamber.address));
+        console.log("wmatic", await wmatic.balanceOf(chamber.address));
 
-    describe("Owner withdraw fees", async function () {
-        it("owner withdraws fees", async function () {
-            await chamber.connect(owner)._redeemFees();
-        })
-    })
+        console.log("TOKENS IN UNI POSITION");
+        console.log(await chamber.calculateCurrentPoolReserves());
+        console.log("TOKENS IN AAVE POSITION");
+        console.log("COLLATERAL TOKENS ");
+        console.log(await chamber.getAUSDCTokenBalance());
+        console.log("DEBT TOKENS ");
+        console.log(
+            await chamber.getVWMATICTokenBalance(),
+            await chamber.getVWETHTokenBalance()
+        );
+        console.log("LTV IS");
+        console.log(await chamber.currentLTV());
 
-    describe("checks 4", async function () {
-        it("makes all checks", async function () {
-            await makeAllChecks();
-        });
+        console.log("TOTAL USD BALANCE");
+        console.log((await chamber.currentUSDBalance()).toString());
+
+        console.log("-----------------------------------------------------");
     });
 });
