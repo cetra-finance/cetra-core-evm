@@ -5,34 +5,34 @@ const fs = require("fs");
 
 module.exports = async () => {
     console.log(network.config.chainId);
-    const currNetworkConfig = networkConfig[network.config.chainId];
+    const currNetworkConfig = networkConfig[network.config.chainId + 2];
 
     let args = [
         currNetworkConfig.uniswapRouterAddress,
         currNetworkConfig.uniswapPoolAddress,
-        currNetworkConfig.aaveWTG3Address,
         currNetworkConfig.aaveV3PoolAddress,
+        currNetworkConfig.aaveVLINKAddress,
         currNetworkConfig.aaveVWETHAddress,
-        currNetworkConfig.aaveVWMATICAddress,
         currNetworkConfig.aaveOracleAddress,
         currNetworkConfig.aaveAUSDCAddress,
+        currNetworkConfig.ticksRange
     ];
 
     let usd = await ethers.getContractAt(
         "IERC20",
         currNetworkConfig.usdcAddress
     );
-    let weth = await ethers.getContractAt(
+    let link = await ethers.getContractAt(
         "IERC20",
-        currNetworkConfig.wethAddress
+        currNetworkConfig.linkAddress
     );
-    let wmatic = await ethers.getContractAt(
+    let weth = await ethers.getContractAt(
         "WMATIC",
-        currNetworkConfig.wmaticAddress
+        currNetworkConfig.wethAddress
     );
 
     console.log("----------------------------------------------------");
-    const Rebalance = await ethers.getContractFactory("ChamberV1");
+    const Rebalance = await ethers.getContractFactory("ChamberV1_LINKETH");
     const rebalance = await Rebalance.deploy(...args);
     await rebalance.deployed();
 
@@ -78,11 +78,11 @@ module.exports = async () => {
     );
 
     await rebalance.giveApprove(
-        wmatic.address,
+        link.address,
         currNetworkConfig.aaveV3PoolAddress
     );
     await rebalance.giveApprove(
-        wmatic.address,
+        link.address,
         currNetworkConfig.uniswapRouterAddress
     );
 
@@ -96,4 +96,4 @@ module.exports = async () => {
     console.log("done");
 };
 
-module.exports.tags = ["all", "rebalance"];
+module.exports.tags = ["all", "rebalanceLINK_WETH"];
