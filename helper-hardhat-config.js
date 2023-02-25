@@ -23,7 +23,8 @@ const networkConfig = {
         hedgeDev: "200000000000000000",
         ticksRange: "700",
     },
-    31338: { // crv/eth
+    31338: {
+        // crv/eth
         name: "fork",
         donorWalletAddress: "0x06959153b974d0d5fdfd87d561db6d8d4fa0bb0b",
         usdcAddress: "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
@@ -34,6 +35,26 @@ const networkConfig = {
         aaveV3PoolAddress: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
         aaveVCRVAddress: "0x77CA01483f379E58174739308945f044e1a764dc",
         aaveVWMATICAddress: "0x4a1c3aD6Ed28a636ee1751C69071f6be75DEb8B8",
+        aaveOracleAddress: "0xb023e699F5a33916Ea823A16485e259257cA8Bd1",
+        targetLTV: "690000000000000000",
+        minLTV: "600000000000000000",
+        maxLTV: "750000000000000000",
+        aaveAUSDCAddress: "0x625E7708f30cA75bfd92586e17077590C60eb4cD",
+        hedgeDev: "200000000000000000",
+        ticksRange: "1000",
+    },
+    31339: {
+        // LINK /WETH
+        name: "fork",
+        donorWalletAddress: "?",
+        usdcAddress: "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+        linkAddress: "0x53e0bca35ec356bd5dddfebbd1fc0fd03fabad39",
+        wethAddress: "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619",
+        uniswapRouterAddress: "0xe592427a0aece92de3edee1f18e0157c05861564",
+        uniswapPoolAddress: "0x3e31ab7f37c048fc6574189135d108df80f0ea26",
+        aaveV3PoolAddress: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
+        aaveVLINKAddress: "0x953A573793604aF8d41F306FEb8274190dB4aE0e",
+        aaveVWETHAddress: "0x0c84331e39d6658Cd6e6b9ba04736cC4c4734351",
         aaveOracleAddress: "0xb023e699F5a33916Ea823A16485e259257cA8Bd1",
         targetLTV: "690000000000000000",
         minLTV: "600000000000000000",
