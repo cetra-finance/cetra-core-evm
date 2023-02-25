@@ -521,7 +521,7 @@ describe("Basic tests newCrv", function () {
             );
 
             for (let i = 0; i < 10; i++) {
-                await makeSwap(donorWallet, 80000, true);
+                await makeSwap(donorWallet, 130000, true);
                 await makeSwap(donorWallet, 30000, false);
             }
 
@@ -542,7 +542,7 @@ describe("Basic tests newCrv", function () {
                 await getPriceFromPair(crv, wmatic, 3000, 1e18, 1e18)
             );
 
-            mine(1000, { interval: 50000 });
+            mine(1000, { interval: 1 });
         });
 
         it("should set all oracles", async function () {
@@ -634,7 +634,7 @@ describe("Basic tests newCrv", function () {
 
             for (let i = 0; i < 10; i++) {
                 await makeSwap(donorWallet, 40000, true);
-                await makeSwap(donorWallet, 70000, false);
+                await makeSwap(donorWallet, 75000, false);
             }
 
             CrvUsdcPrices = (await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))[0] * (await getPriceFromPair(crv, wmatic, 3000, 1e18, 1e18))[1]

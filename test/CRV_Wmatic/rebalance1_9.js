@@ -546,7 +546,7 @@ describe("Basic tests newCrv", function () {
                 await getPriceFromPair(crv, wmatic, 3000, 1e18, 1e18)
             );
 
-            mine(1000, { interval: 72 });
+            mine(1000, { interval: 25000 });
         });
 
         it("should set all oracles", async function () {

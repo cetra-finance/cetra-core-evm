@@ -525,7 +525,7 @@ describe("Basic tests newCrv", function () {
                 .deposit({ value: ethers.utils.parseEther("10000000") });
 
             for (let i = 0; i < 10; i++) {
-                await makeSwap(donorWallet, 80000, true);
+                await makeSwap(donorWallet, 100000, true);
                 await makeSwap(donorWallet, 30000, false);
             }
 
