@@ -1,6 +1,6 @@
 //const { ethers } = require("ethers");
 const { ethers } = require("hardhat");
-const { networkConfig } = require("../../helper-hardhat-config");
+const { networkConfig } = require("../helper-hardhat-config");
 const fs = require("fs");
 
 module.exports = async () => {
