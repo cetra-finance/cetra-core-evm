@@ -249,9 +249,16 @@ contract ChamberV1Stable is
         uint256 usdOraclePrice = getUsdOraclePrice();
         uint256 tokenOraclePrice = getTokenOraclePrice();
 
+        console.log("usdOraclePrice", usdOraclePrice);
+        console.log("tokenOraclePrice", tokenOraclePrice);
+
+        console.log("amountUsd", amountUsd * 1e12);
+        console.log("amountToken", amountToken);
+        console.log("K", amountUsd * 1e12 / amountToken);
+
         uint256 UsdToSupply =  
-            (usdAmount / (amountUsd / amountToken) * tokenOraclePrice * 1e12) /
-            ((usdOraclePrice * usedLTV) + (usdOraclePrice / (amountUsd / amountToken) * 1e12));
+            (usdAmount / (amountUsd * 1e12 / amountToken) * tokenOraclePrice * 1e12) /
+            ((usdOraclePrice * usedLTV) + (usdOraclePrice / (amountUsd * 1e12 / amountToken) * 1e12));
 
         console.log("UsdToSupply", UsdToSupply);
 

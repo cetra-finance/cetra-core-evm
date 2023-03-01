@@ -236,7 +236,7 @@ describe("maticToEthPriceConst", function () {
 
     before(async () => {
         console.log("DEPLOYING VAULT, FUNDING USER ACCOUNTS...");
-        const currNetworkConfig = networkConfig[network.config.chainId];
+        const currNetworkConfig = networkConfig[network.config.chainId + 4];
         accounts = await ethers.getSigners();
         owner = accounts[0];
         user1 = accounts[1];
@@ -263,7 +263,7 @@ describe("maticToEthPriceConst", function () {
         );
         UniRouter = await ethers.getContractAt(
             "ISwapRouter",
-            networkConfig[network.config.chainId].uniswapRouterAddress
+            currNetworkConfig.uniswapRouterAddress
         );
 
         const chamberFactory = await ethers.getContractFactory("ChamberV1Stable");
