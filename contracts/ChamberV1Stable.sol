@@ -251,7 +251,7 @@ contract ChamberV1Stable is
 
         uint256 UsdToSupply =  
             (usdAmount / (amountUsd / amountToken) * tokenOraclePrice * 1e12) /
-            ((usdOraclePrice * usedLTV) + (usdOraclePrice / (amountUsd / amountToken)  * 1e12));
+            ((usdOraclePrice * usedLTV) + (usdOraclePrice / (amountUsd / amountToken) * 1e12));
 
         console.log("UsdToSupply", UsdToSupply);
 
