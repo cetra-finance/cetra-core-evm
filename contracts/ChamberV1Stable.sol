@@ -569,22 +569,21 @@ contract ChamberV1Stable is
             uint256 usdFeePending,
             uint256 tokenFeePending
         ) = calculateCurrentFees();
-        uint256 pureUSDAmount = getAUSDTokenBalance() +
-            TransferHelper.safeGetBalance(i_usdAddress);
-        uint256 poolTokensValue = ((usdPoolBalance +
-            usdFeePending -
-            s_cetraFeeUsd) *
-            getUsdOraclePrice() +
+
+        uint256 pureUSDAmount = getAUSDTokenBalance() + TransferHelper.safeGetBalance(i_usdAddress);
+        uint256 poolTokensValue = (usdPoolBalance +
+                usdFeePending -
+                s_cetraFeeUsd) *
+            getUsdOraclePrice() /
+            1e18 +
             (tokenPoolBalance +
                 tokenFeePending +
                 TransferHelper.safeGetBalance(i_tokenAddress) -
                 s_cetraFeeToken) *
-            getTokenOraclePrice()) /
-            getUsdOraclePrice() /
-            1e12;
+            getTokenOraclePrice() / 1e30;
         uint256 debtTokensValue = (getVTokenBalance() * getTokenOraclePrice()) /
-            getUsdOraclePrice() /
-            1e12;
+            1e30;
+
         return pureUSDAmount + poolTokensValue - debtTokensValue;
     }
 
