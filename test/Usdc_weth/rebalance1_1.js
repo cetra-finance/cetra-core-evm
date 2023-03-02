@@ -6,7 +6,7 @@ const helpers = require("@nomicfoundation/hardhat-network-helpers");
 const { mine } = require("@nomicfoundation/hardhat-network-helpers");
 const JSBI = require("jsbi");
 
-describe("maticToEthPriceConst", function () {
+describe("usdcEth", function () {
     let owner, _, user1, user2, donorWallet;
     let usd, weth, aUSD, vWETH;
     let aaveOracle, UniRouter;
@@ -205,8 +205,9 @@ describe("maticToEthPriceConst", function () {
         );
 
         console.log(
-            "Owner fees:", (await chamber.getAdminBalance()).toString(),
-        )
+            "Owner fees:",
+            (await chamber.getAdminBalance()).toString()
+        );
 
         console.log("TOKENS IN UNI POSITION:");
         console.log((await chamber.calculateCurrentPoolReserves()).toString());
@@ -252,11 +253,11 @@ describe("maticToEthPriceConst", function () {
         aUSD = await ethers.getContractAt(
             "IERC20",
             currNetworkConfig.aaveAUSDCAddress
-        )
+        );
         vWETH = await ethers.getContractAt(
             "IERC20",
             currNetworkConfig.aaveVWETHAddress
-        )
+        );
         aaveOracle = await ethers.getContractAt(
             "IAaveOracle",
             currNetworkConfig.aaveOracleAddress
@@ -266,7 +267,9 @@ describe("maticToEthPriceConst", function () {
             currNetworkConfig.uniswapRouterAddress
         );
 
-        const chamberFactory = await ethers.getContractFactory("ChamberV1Stable");
+        const chamberFactory = await ethers.getContractFactory(
+            "ChamberV1Stable"
+        );
         chamber = await chamberFactory.deploy(
             currNetworkConfig.uniswapRouterAddress,
             currNetworkConfig.uniswapPoolAddress,
@@ -383,7 +386,7 @@ describe("maticToEthPriceConst", function () {
     //         console.log("matic/usd", await getPriceFromPair(usd, wmatic, 500, 1e6, 1e18))
     //         console.log("usd/weth", await getPriceFromPair(weth, usd, 500, 1e18, 1e6))
     //         console.log("matic/weth", await getPriceFromPair(weth, wmatic, 500, 1e18, 1e18))
-            
+
     //         await wmatic
     //             .connect(donorWallet)
     //             .deposit({ value: ethers.utils.parseEther("1000000") });

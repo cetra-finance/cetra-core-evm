@@ -151,19 +151,17 @@ contract ChamberV1Stable is
     }
 
     function burn(uint256 _shares) external override lock {
-    //     uint256 usdBalanceBefore = TransferHelper.safeGetBalance(
-    //         i_usdAddress
-    //     );
-    //     _burn(_shares);
-
-    //     s_totalShares -= _shares;
-    //     s_userShares[msg.sender] -= _shares;
-
-    //     TransferHelper.safeTransfer(
-    //         i_usdAddress,
-    //         msg.sender,
-    //         TransferHelper.safeGetBalance(i_usdAddress) - usdBalanceBefore
-    //     );
+        //     uint256 usdBalanceBefore = TransferHelper.safeGetBalance(
+        //         i_usdAddress
+        //     );
+        //     _burn(_shares);
+        //     s_totalShares -= _shares;
+        //     s_userShares[msg.sender] -= _shares;
+        //     TransferHelper.safeTransfer(
+        //         i_usdAddress,
+        //         msg.sender,
+        //         TransferHelper.safeGetBalance(i_usdAddress) - usdBalanceBefore
+        //     );
     }
 
     function checkUpkeep(
@@ -240,7 +238,9 @@ contract ChamberV1Stable is
         if (usedLTV < (10 * PRECISION) / 100) {
             usedLTV = s_targetLTV;
         }
-        (uint256 amountUsd, uint256 amountToken) = calculatePoolReserves(uint128(1e18));
+        (uint256 amountUsd, uint256 amountToken) = calculatePoolReserves(
+            uint128(1e18)
+        );
 
         if (amountUsd == 0 || amountToken == 0) {
             revert ChamberV1__TicksOut();
@@ -251,25 +251,25 @@ contract ChamberV1Stable is
 
         console.log("usdOraclePrice", usdOraclePrice);
         console.log("tokenOraclePrice", tokenOraclePrice);
-
-        console.log("amountUsd", amountUsd * 1e12);
+        console.log("usdAmount", usdAmount);
+        console.log("amountUsd", amountUsd);
         console.log("amountToken", amountToken);
-        console.log("K", amountUsd * 1e12 / amountToken);
+        console.log("1/K", amountToken / amountUsd);
 
-        uint256 UsdToSupply =  
-            (usdAmount / (amountUsd * 1e12 / amountToken) * tokenOraclePrice * 1e12) /
-            ((usdOraclePrice * usedLTV) + (usdOraclePrice / (amountUsd * 1e12 / amountToken) * 1e12));
+        uint256 UsdToSupply = ((tokenOraclePrice * usdAmount * amountToken) /
+            amountUsd) /
+            PRECISION /
+            (((usdOraclePrice * usedLTV) * 1e12) /
+                PRECISION /
+                PRECISION +
+                ((tokenOraclePrice * amountToken) / amountUsd / PRECISION));
 
         console.log("UsdToSupply", UsdToSupply);
 
-        i_aaveV3Pool.supply(
-            i_usdAddress,
-            UsdToSupply,
-            address(this),
-            0
-        );
+        i_aaveV3Pool.supply(i_usdAddress, UsdToSupply, address(this), 0);
 
-        uint256 tokenToBorrow = UsdToSupply * usedLTV;
+        uint256 tokenToBorrow = (((UsdToSupply * usedLTV * usdOraclePrice) /
+            tokenOraclePrice) / PRECISION) * 1e12;
 
         console.log("tokenToBorrow", tokenToBorrow);
 
@@ -582,8 +582,7 @@ contract ChamberV1Stable is
             getTokenOraclePrice()) /
             getUsdOraclePrice() /
             1e12;
-        uint256 debtTokensValue = (getVTokenBalance() *
-            getTokenOraclePrice()) /
+        uint256 debtTokensValue = (getVTokenBalance() * getTokenOraclePrice()) /
             getUsdOraclePrice() /
             1e12;
         return pureUSDAmount + poolTokensValue - debtTokensValue;
@@ -754,9 +753,8 @@ contract ChamberV1Stable is
     function getVTokenBalance() private view returns (uint256) {
         return
             (i_aaveVToken.scaledBalanceOf(address(this)) *
-                i_aaveV3Pool.getReserveNormalizedVariableDebt(
-                    i_tokenAddress
-                )) / 1e27;
+                i_aaveV3Pool.getReserveNormalizedVariableDebt(i_tokenAddress)) /
+            1e27;
     }
 
     // =================================
@@ -796,11 +794,7 @@ contract ChamberV1Stable is
         }
 
         if (amount0Owed > 0)
-            TransferHelper.safeTransfer(
-                i_usdAddress,
-                msg.sender,
-                amount0Owed
-            );
+            TransferHelper.safeTransfer(i_usdAddress, msg.sender, amount0Owed);
         if (amount1Owed > 0)
             TransferHelper.safeTransfer(
                 i_tokenAddress,
@@ -816,10 +810,10 @@ contract ChamberV1Stable is
     // =================================
 
     function _redeemFees() external override onlyOwner {
-    //     TransferHelper.safeTransfer(i_token1Address, owner(), s_cetraFeeToken1);
-    //     TransferHelper.safeTransfer(i_token0Address, owner(), s_cetraFeeToken0);
-    //     s_cetraFeeToken1 = 0;
-    //     s_cetraFeeToken0 = 0;
+        //     TransferHelper.safeTransfer(i_token1Address, owner(), s_cetraFeeToken1);
+        //     TransferHelper.safeTransfer(i_token0Address, owner(), s_cetraFeeToken0);
+        //     s_cetraFeeToken1 = 0;
+        //     s_cetraFeeToken0 = 0;
     }
 
     function setTicksRange(int24 _ticksRange) external override onlyOwner {
