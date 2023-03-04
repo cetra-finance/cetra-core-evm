@@ -23,6 +23,8 @@ import "./MathHelper.sol";
 import "./IChamberV1.sol";
 import "./swapHelpers/ISwapHelper.sol";
 
+import "hardhat/console.sol";
+
 /*Errors */
 error ChamberV1__ReenterancyGuard();
 error ChamberV1__AaveDepositError();
@@ -73,7 +75,7 @@ contract ChamberV1_WETHSNX_Sonne is
 
     int24 private s_ticksRange;
 
-    ISwapHelper private immutable s_swapHelper;
+    address private immutable s_swapHelper;
 
     address private constant i_usdcAddress = 0x7F5c764cBc14f9669B88837ca1490cCa17c31607;
     address private constant i_token0Address = 0x4200000000000000000000000000000000000006;
@@ -122,7 +124,7 @@ contract ChamberV1_WETHSNX_Sonne is
         address _swapHelper,
         int24 _ticksRange
     ) {
-        s_swapHelper = ISwapHelper(_swapHelper);
+        s_swapHelper = _swapHelper;
         unlocked = true;
         s_ticksRange = _ticksRange;
 
@@ -350,10 +352,22 @@ contract ChamberV1_WETHSNX_Sonne is
                 uint256 token1Remainder
             ) = _repayAndWithdraw(_shares, amountToken0, amountToken1);
             if (token0Remainder > 0) {
-                s_swapHelper.swapExactAssetToStable(i_token0Address, token0Remainder);
+                s_swapHelper.delegatecall(
+                    abi.encodeWithSignature(
+                        "swapExactAssetToStable(address,uint256)",
+                        i_token0Address,
+                        token0Remainder
+                    )
+                );
             }
             if (token1Remainder > 0) {
-                s_swapHelper.swapExactAssetToStable(i_token1Address, token1Remainder);
+                s_swapHelper.delegatecall(
+                    abi.encodeWithSignature(
+                        "swapExactAssetToStable(address,uint256)",
+                        i_token1Address,
+                        token1Remainder
+                    )
+                );
             }
         }
     }
@@ -393,11 +407,15 @@ contract ChamberV1_WETHSNX_Sonne is
         uint256 token0Swapped = 0;
 
         if (token1OwnedByUser < token1DebtToCover) {
-            token0Swapped += s_swapHelper.swapAssetToExactAsset(
-                i_token0Address,
-                i_token1Address,
-                token1DebtToCover - token1OwnedByUser
+            (,bytes memory data) = s_swapHelper.delegatecall(
+                abi.encodeWithSignature(
+                    "swapAssetToExactAsset(address,address,uint256)",
+                    i_token1Address,
+                    i_token0Address,
+                    token1DebtToCover - token1OwnedByUser
+                )
             );
+            token0Swapped += abi.decode(data, (uint256));
             if (
                 token1OwnedByUser +
                     TransferHelper.safeGetBalance(i_token1Address) -
@@ -417,9 +435,12 @@ contract ChamberV1_WETHSNX_Sonne is
         );
 
         if (token0OwnedByUser < token0DebtToCover + token0Swapped) {
-            s_swapHelper.swapStableToExactAsset(
-                i_token0Address,
-                token0DebtToCover + token0Swapped - token0OwnedByUser
+            s_swapHelper.delegatecall(
+                abi.encodeWithSignature(
+                    "swapStableToExactAsset(address,uint256)",
+                    i_token0Address,
+                    token0DebtToCover + token0Swapped - token0OwnedByUser
+                )
             );
             if (
                 (token0OwnedByUser +

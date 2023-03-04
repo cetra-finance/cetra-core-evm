@@ -9,7 +9,7 @@ const { keccak256 } = require("ethers/lib/utils");
 
 describe("Basic tests sonneSNX", function () {
     let owner, _, user1, user2, donorWallet;
-    let usd, weth, snx, soUSDC, soWETH, soSNX;
+    let usd, weth, snx, sonne, soUSDC, soWETH, soSNX;
     let sonneOracle, UniRouter;
 
     // =================================
@@ -367,6 +367,10 @@ describe("Basic tests sonneSNX", function () {
             "IERC20",
             currNetworkConfig.wethAddress
         );
+        sonne = await ethers.getContractAt(
+            "IERC20",
+            currNetworkConfig.sonneAddress
+        );
         soUSDC = await ethers.getContractAt(
             "ICErc20",
             currNetworkConfig.soUSDC
@@ -385,17 +389,16 @@ describe("Basic tests sonneSNX", function () {
             currNetworkConfig.uniswapRouterAddress
         );
 
+        const SwapHelperFactory = await ethers.getContractFactory(
+            "WETHSNX_swapHelper"
+        );
+        const swapHelper = await SwapHelperFactory.deploy();
+
         const chamberFactory = await ethers.getContractFactory(
             "ChamberV1_WETHSNX_Sonne"
         );
         chamber = await chamberFactory.deploy(
-            currNetworkConfig.uniswapRouterAddress,
-            currNetworkConfig.uniswapPoolAddress,
-            currNetworkConfig.sonneComptrollerAddress,
-            currNetworkConfig.soUSDC,
-            currNetworkConfig.soWETH,
-            currNetworkConfig.soSNX,
-            currNetworkConfig.sonnePriceOracle,
+            swapHelper.address,
             currNetworkConfig.ticksRange
         );
         console.log(currNetworkConfig.uniswapPoolAddress);
