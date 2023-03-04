@@ -21,7 +21,6 @@ import "./TransferHelper.sol";
 import "./MathHelper.sol";
 
 import "./IChamberV1.sol";
-import "hardhat/console.sol";
 
 /*Errors */
 error ChamberV1__ReenterancyGuard();
@@ -73,19 +72,19 @@ contract ChamberV1_WETHSNX_Sonne is
 
     int24 private s_ticksRange;
 
-    address private immutable i_usdcAddress;
-    address private immutable i_token0Address;
-    address private immutable i_token1Address;
+    address private constant i_usdcAddress = 0x7F5c764cBc14f9669B88837ca1490cCa17c31607;
+    address private constant i_token0Address = 0x4200000000000000000000000000000000000006;
+    address private constant i_token1Address = 0x8700dAec35aF8Ff88c16BdF0418774CB3D7599B4;
 
-    ICErc20 private immutable i_soUSDC;
-    ICErc20 private immutable i_soToken0;
-    ICErc20 private immutable i_soToken1;
+    ICErc20 private constant i_soUSDC = ICErc20(0xEC8FEa79026FfEd168cCf5C627c7f486D77b765F);
+    ICErc20 private constant i_soToken0 = ICErc20(0xf7B5965f5C117Eb1B5450187c9DcFccc3C317e8E);
+    ICErc20 private constant i_soToken1 = ICErc20(0xD7dAabd899D1fAbbC3A9ac162568939CEc0393Cc);
 
-    PriceOracle private immutable i_sonneOracle;
-    IComptroller private immutable i_sonneComptroller;
+    PriceOracle private constant i_sonneOracle = PriceOracle(0xEFc0495DA3E48c5A55F73706b249FD49d711A502);
+    IComptroller private constant i_sonneComptroller = IComptroller(0x60CF091cD3f50420d50fD7f707414d0DF4751C58);
 
-    ISwapRouter private immutable i_uniswapSwapRouter;
-    IUniswapV3Pool private immutable i_uniswapPool;
+    ISwapRouter private constant i_uniswapSwapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+    IUniswapV3Pool private constant i_uniswapPool = IUniswapV3Pool(0x0392b358CE4547601BEFa962680BedE836606ae2);
 
     uint256 private constant USDC_RATE = 1e6;
     uint256 private constant TOKEN0_RATE = 1e18;
@@ -117,27 +116,8 @@ contract ChamberV1_WETHSNX_Sonne is
     // =================================
 
     constructor(
-        address _uniswapSwapRouterAddress,
-        address _uniswapPoolAddress,
-        address _sonneComptrollerAddress,
-        address _sonneSoUSDCAddress,
-        address _sonneSoToken0Address,
-        address _sonneSoToken1Address,
-        address _sonneOracleAddress,
         int24 _ticksRange
     ) {
-        i_uniswapSwapRouter = ISwapRouter(_uniswapSwapRouterAddress);
-        i_uniswapPool = IUniswapV3Pool(_uniswapPoolAddress);
-        i_sonneComptroller = IComptroller(_sonneComptrollerAddress);
-        i_sonneOracle = PriceOracle(_sonneOracleAddress);
-        i_soToken0 = ICErc20(_sonneSoToken0Address);
-        i_soToken1 = ICErc20(_sonneSoToken1Address);
-        i_soUSDC = ICErc20(_sonneSoUSDCAddress);
-
-        i_usdcAddress = i_soUSDC.underlying();
-        i_token0Address = i_soToken0.underlying();
-        i_token1Address = i_soToken1.underlying();
-
         unlocked = true;
         s_ticksRange = _ticksRange;
 
@@ -268,9 +248,11 @@ contract ChamberV1_WETHSNX_Sonne is
         }
         (amount0, amount1) = calculatePoolReserves(uint128(1e18));
 
-        assert(
-            i_soUSDC.mint(TransferHelper.safeGetBalance(i_usdcAddress)) == 0
-        );
+        if(
+            i_soUSDC.mint(TransferHelper.safeGetBalance(i_usdcAddress)) != 0
+        ) {
+            revert();
+        }
 
         uint256 usdcOraclePrice = getUsdcOraclePrice();
         uint256 token0OraclePrice = getToken0OraclePrice();
@@ -297,12 +279,17 @@ contract ChamberV1_WETHSNX_Sonne is
             PRECISION;
 
         if (token0ToBorrow > 0) {
-            assert(i_soToken0.borrow(token0ToBorrow) == 0);
+            if(i_soToken0.borrow(token0ToBorrow) != 0) {
+                revert();
+            }
         }
         if (token1ToBorrow > 0) {
-            assert(i_soToken1.borrow(token1ToBorrow) == 0);
+            if(i_soToken1.borrow(token1ToBorrow) != 0){
+                revert();
+            }
         }
-        (uint256 error, uint256 liquidity, ) = i_sonneComptroller
+
+        i_sonneComptroller
             .getAccountLiquidity(address(this));
 
         {
@@ -395,12 +382,11 @@ contract ChamberV1_WETHSNX_Sonne is
             i_token0Address
         );
 
-        uint256 token0Swapped = 0;
-        uint256 usdcSwapped = 0;
-
         uint256 usdcOraclePrice = getUsdcOraclePrice();
-
         uint256 _currentLTV = currentLTV();
+
+        uint256 token0Swapped = 0;
+
         if (token1OwnedByUser < token1DebtToCover) {
             token0Swapped += swapAssetToExactAsset(
                 i_token0Address,
@@ -426,8 +412,7 @@ contract ChamberV1_WETHSNX_Sonne is
         );
 
         if (token0OwnedByUser < token0DebtToCover + token0Swapped) {
-            usdcSwapped += swapStableToExactAsset(
-                i_token0Address,
+            swapStableToExactAsset(
                 token0DebtToCover + token0Swapped - token0OwnedByUser
             );
             if (
@@ -480,10 +465,9 @@ contract ChamberV1_WETHSNX_Sonne is
     function swapExactAssetToStable(
         address assetIn,
         uint256 amountIn
-    ) private returns (uint256) {
-        uint256 amountOut;
+    ) private {
         if (assetIn == i_token0Address) {
-            amountOut = i_uniswapSwapRouter.exactInput(
+            i_uniswapSwapRouter.exactInput(
                 ISwapRouter.ExactInputParams({
                     path: abi.encodePacked(assetIn, uint24(500), i_usdcAddress),
                     recipient: address(this),
@@ -493,7 +477,7 @@ contract ChamberV1_WETHSNX_Sonne is
                 })
             );
         } else {
-            amountOut = i_uniswapSwapRouter.exactInput(
+            i_uniswapSwapRouter.exactInput(
                 ISwapRouter.ExactInputParams({
                     path: abi.encodePacked(
                         assetIn,
@@ -509,46 +493,24 @@ contract ChamberV1_WETHSNX_Sonne is
                 })
             );
         }
-        return (amountOut);
     }
 
     function swapStableToExactAsset(
-        address assetOut,
         uint256 amountOut
-    ) private returns (uint256) {
-        uint256 amountIn;
-        if (assetOut == i_token0Address) {
-            amountIn = i_uniswapSwapRouter.exactOutput(
-                ISwapRouter.ExactOutputParams({
-                    path: abi.encodePacked(
-                        assetOut,
-                        uint24(500),
-                        i_usdcAddress
-                    ),
-                    recipient: address(this),
-                    deadline: block.timestamp,
-                    amountOut: amountOut,
-                    amountInMaximum: 1e50
-                })
-            );
-        } else {
-            amountIn = i_uniswapSwapRouter.exactOutput(
-                ISwapRouter.ExactOutputParams({
-                    path: abi.encodePacked(
-                        assetOut,
-                        uint24(3000),
-                        i_token0Address,
-                        uint24(500),
-                        i_usdcAddress
-                    ),
-                    recipient: address(this),
-                    deadline: block.timestamp,
-                    amountOut: amountOut,
-                    amountInMaximum: 1e50
-                })
-            );
-        }
-        return (amountIn);
+    ) private {
+        i_uniswapSwapRouter.exactOutput(
+            ISwapRouter.ExactOutputParams({
+                path: abi.encodePacked(
+                    i_token0Address,
+                    uint24(500),
+                    i_usdcAddress
+                ),
+                recipient: address(this),
+                deadline: block.timestamp,
+                amountOut: amountOut,
+                amountInMaximum: 1e50
+            })
+        );
     }
 
     function swapAssetToExactAsset(
@@ -677,7 +639,7 @@ contract ChamberV1_WETHSNX_Sonne is
 
     function currentLTV() public view override returns (uint256) {
         // return currentETHBorrowed * getToken0OraclePrice() / currentUSDInCollateral/getUsdOraclePrice()
-        (uint256 error, uint256 liquidity, ) = i_sonneComptroller
+        (,uint256 liquidity, ) = i_sonneComptroller
             .getAccountLiquidity(address(this));
         uint256 ltv = (PRECISION * 9) /
             10 -
