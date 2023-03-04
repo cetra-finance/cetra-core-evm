@@ -9,14 +9,16 @@ async function enterChamber() {
         currNetworkConfig.usdcAddress
     );
     let chamber = await ethers.getContractAt(
-        "ChamberV1",
-        "0x0AF6aDEa1a5ADA8D1AB05fE06B76aD71f7407a56"
+        "ChamberV1VolStable",
+        "0x93e3b2e1e3837622156fecdc6e5472af31fe10bb"
     );
-    let tx1 = await usd.approve(chamber.address, "10000000000000000");
-    const tx1R = await tx1.wait(1);
-    let tx2 = await chamber.mint("10000000");
-    const tx2R = await tx2.wait(1);
-    console.log(tx1R, tx2R);
+    // let tx1 = await usd.approve(chamber.address, "5000000000000000");
+    // const tx1R = await tx1.wait(1);
+    // let tx2 = await chamber.mint("1000000");
+    // const tx2R = await tx2.wait(1);
+    let tx3 = await chamber.burn("1000000");
+    const tx3R = await tx2.wait(1);
+    // console.log(tx1R, tx2R);
 }
 
 enterChamber()

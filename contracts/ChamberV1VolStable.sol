@@ -18,24 +18,22 @@ import "./AaveInterfaces/IVariableDebtToken.sol";
 import "./TransferHelper.sol";
 import "./MathHelper.sol";
 
-import "./IChamberV1Stable.sol";
-
 import "hardhat/console.sol";
+
+import "./IChamberV1Stable.sol";
 
 /*Errors */
 error ChamberV1__ReenterancyGuard();
 error ChamberV1__AaveDepositError();
-error ChamberV1__UserRepaidMoreToken0ThanOwned();
-error ChamberV1__UserRepaidMoreToken1ThanOwned();
-error ChamberV1__SwappedUsdForToken0StillCantRepay();
-error ChamberV1__SwappedToken0ForToken1StillCantRepay();
+error ChamberV1__UserRepaidMoreTokenThanOwned();
+error ChamberV1__SwappedUsdForTokenStillCantRepay();
 error ChamberV1__CallerIsNotUniPool();
 error ChamberV1__sharesWorthMoreThenDep();
 error ChamberV1__TicksOut();
-error ChamberV1__UpkeepNotNeeded(uint256 _currentLTV, uint256 _totalShares);
+error ChamberV1__UpkeepNotNeeded();
 
 // For Wmatic/Weth
-contract ChamberV1Stable is
+contract ChamberV1VolStable is
     IChamberV1Stable,
     Ownable,
     IUniswapV3MintCallback,
@@ -86,6 +84,12 @@ contract ChamberV1Stable is
 
     uint256 private constant PRECISION = 1e18;
     uint256 private constant CETRA_FEE = 5 * 1e16;
+
+    uint256 private constant USD_RATE = 1e6;
+    uint256 private constant TOKEN_RATE = 1e18;
+
+    int24 private constant TICK_SPACING = 10;
+    bool private constant ZERO_IS_VOL = true;
 
     // ================================
     // Modifiers
@@ -151,17 +155,19 @@ contract ChamberV1Stable is
     }
 
     function burn(uint256 _shares) external override lock {
-        //     uint256 usdBalanceBefore = TransferHelper.safeGetBalance(
-        //         i_usdAddress
-        //     );
-        //     _burn(_shares);
-        //     s_totalShares -= _shares;
-        //     s_userShares[msg.sender] -= _shares;
-        //     TransferHelper.safeTransfer(
-        //         i_usdAddress,
-        //         msg.sender,
-        //         TransferHelper.safeGetBalance(i_usdAddress) - usdBalanceBefore
-        //     );
+        uint256 usdBalanceBefore = TransferHelper.safeGetBalance(i_usdAddress);
+        uint256 feeBefore = s_cetraFeeUsd;
+        _burn(_shares);
+        s_totalShares -= _shares;
+        s_userShares[msg.sender] -= _shares;
+        TransferHelper.safeTransfer(
+            i_usdAddress,
+            msg.sender,
+            TransferHelper.safeGetBalance(i_usdAddress) -
+                usdBalanceBefore -
+                s_cetraFeeUsd +
+                feeBefore
+        );
     }
 
     function checkUpkeep(
@@ -172,50 +178,43 @@ contract ChamberV1Stable is
         override
         returns (bool upkeepNeeded, bytes memory /* performData */)
     {
-        // uint256 _currentLTV = currentLTV();
-        // (
-        //     uint256 token0Pool,
-        //     uint256 token1Pool
-        // ) = calculateCurrentPoolReserves();
-        // uint256 token0Borrowed = getVToken0Balance();
-        // uint256 token1Borrowed = getVToken1Balance();
-        // bool tooMuchExposureTakenToken0;
-        // bool tooMuchExposureTakenToken1;
-        // if (token1Pool == 0 || token0Pool == 0) {
-        //     tooMuchExposureTakenToken0 = true;
-        //     tooMuchExposureTakenToken1 = true;
-        // } else {
-        //     tooMuchExposureTakenToken0 = (token0Borrowed > token0Pool)
-        //         ? (((token0Borrowed - token0Pool) * PRECISION) / token0Pool >
-        //             s_hedgeDev)
-        //         : (
-        //             (((token0Pool - token0Borrowed) * PRECISION) / token0Pool >
-        //                 s_hedgeDev)
-        //         );
-        //     tooMuchExposureTakenToken1 = (token1Borrowed > token1Pool)
-        //         ? (((token1Borrowed - token1Pool) * PRECISION) / token1Pool >
-        //             s_hedgeDev)
-        //         : (
-        //             (((token1Pool - token1Borrowed) * PRECISION) / token1Pool >
-        //                 s_hedgeDev)
-        //         );
-        // }
-        // upkeepNeeded =
-        //     (_currentLTV >= s_maxLTV ||
-        //         _currentLTV <= s_minLTV ||
-        //         tooMuchExposureTakenToken0 ||
-        //         tooMuchExposureTakenToken1) &&
-        //     (s_totalShares != 0);
-        // return (upkeepNeeded, "0x0");
-        return (false, "0x0");
+        {
+            (uint256 tokenPool, ) = calculateCurrentPoolReserves();
+            if (tokenPool == 0) {
+                return (true, "0x0");
+            }
+        }
+
+        uint256 _currentLTV = currentLTV();
+        uint256 _currentHedgeDev = currentHedgeDev();
+        upkeepNeeded =
+            (_currentLTV >= s_maxLTV ||
+                _currentLTV <= s_minLTV ||
+                _currentHedgeDev > s_hedgeDev) &&
+            (s_totalShares != 0);
+        return (upkeepNeeded, "0x0");
+    }
+
+    function currentHedgeDev() private view returns (uint256) {
+        (uint256 tokenPool, ) = calculateCurrentPoolReserves();
+        uint256 hedgeDev;
+        if (tokenPool != 0) {
+            uint256 tokenBorrowed = getVTokenBalance();
+            hedgeDev = (tokenBorrowed > tokenPool)
+                ? (((tokenBorrowed - tokenPool) * PRECISION) / tokenPool)
+                : ((((tokenPool - tokenBorrowed) * PRECISION) / tokenPool));
+        } else {
+            hedgeDev = 0;
+        }
+        return hedgeDev;
     }
 
     function performUpkeep(bytes calldata /* performData */) external override {
-        // (bool upkeepNeeded, ) = checkUpkeep("");
-        // if (!upkeepNeeded) {
-        //     revert ChamberV1__UpkeepNotNeeded(currentLTV(), s_totalShares);
-        // }
-        // rebalance();
+        (bool upkeepNeeded, ) = checkUpkeep("");
+        if (!upkeepNeeded) {
+            revert ChamberV1__UpkeepNotNeeded();
+        }
+        rebalance();
     }
 
     // =================================
@@ -226,53 +225,43 @@ contract ChamberV1Stable is
         uint256 usedLTV;
 
         int24 currentTick = getTick();
+        uint256 usdOraclePrice = getUsdOraclePrice();
+        uint256 tokenOraclePrice = getTokenOraclePrice();
+        uint256 amountUsd;
+        uint256 amountToken;
 
         if (!s_liquidityTokenId) {
-            s_lowerTick = ((currentTick - s_ticksRange) / 60) * 60;
-            s_upperTick = ((currentTick + s_ticksRange) / 60) * 60;
+            s_lowerTick =
+                ((currentTick - s_ticksRange) / TICK_SPACING) *
+                TICK_SPACING;
+            s_upperTick =
+                ((currentTick + s_ticksRange) / TICK_SPACING) *
+                TICK_SPACING;
             usedLTV = s_targetLTV;
-            s_liquidityTokenId = true;
         } else {
             usedLTV = currentLTV();
         }
         if (usedLTV < (10 * PRECISION) / 100) {
             usedLTV = s_targetLTV;
         }
-        (uint256 amountUsd, uint256 amountToken) = calculatePoolReserves(
-            uint128(1e18)
-        );
-
+        (amountToken, amountUsd) = calculatePoolReserves(uint128(1e18));
         if (amountUsd == 0 || amountToken == 0) {
             revert ChamberV1__TicksOut();
         }
 
-        uint256 usdOraclePrice = getUsdOraclePrice();
-        uint256 tokenOraclePrice = getTokenOraclePrice();
-
-        console.log("usdOraclePrice", usdOraclePrice);
-        console.log("tokenOraclePrice", tokenOraclePrice);
-        console.log("usdAmount", usdAmount);
-        console.log("amountUsd", amountUsd);
-        console.log("amountToken", amountToken);
-        console.log("1/K", amountToken / amountUsd);
-
         uint256 UsdToSupply = ((tokenOraclePrice * usdAmount * amountToken) /
             amountUsd) /
             PRECISION /
-            (((usdOraclePrice * usedLTV) * 1e12) /
+            ((((usdOraclePrice * usedLTV) * TOKEN_RATE) / USD_RATE) /
                 PRECISION /
                 PRECISION +
                 ((tokenOraclePrice * amountToken) / amountUsd / PRECISION));
-
-        console.log("UsdToSupply", UsdToSupply);
-
+        console.log(UsdToSupply);
         i_aaveV3Pool.supply(i_usdAddress, UsdToSupply, address(this), 0);
 
-        uint256 tokenToBorrow = (((UsdToSupply * usedLTV * usdOraclePrice) /
-            tokenOraclePrice) / PRECISION) * 1e12;
-
-        console.log("tokenToBorrow", tokenToBorrow);
-
+        uint256 tokenToBorrow = ((((UsdToSupply * usedLTV * usdOraclePrice) /
+            tokenOraclePrice) / PRECISION) * TOKEN_RATE) / USD_RATE;
+        console.log(tokenToBorrow);
         if (tokenToBorrow > 0) {
             i_aaveV3Pool.borrow(
                 i_tokenAddress,
@@ -288,12 +277,59 @@ contract ChamberV1Stable is
                 i_tokenAddress
             ) - s_cetraFeeToken;
 
+            uint256 tokenToDeposit = tokenRecieved;
+
+            if (s_liquidityTokenId) {
+                (amountToken, amountUsd) = calculatePoolReserves(
+                    getLiquidity()
+                );
+                uint256 poolSkew = getVTokenBalance() > tokenRecieved
+                    ? (PRECISION * amountToken) /
+                        (getVTokenBalance() - tokenRecieved)
+                    : PRECISION;
+                tokenToDeposit = (tokenRecieved * poolSkew) / PRECISION;
+                if (poolSkew > PRECISION) {
+                    if (tokenToDeposit - tokenRecieved > 1e6) {
+                        swapStableToExactAsset(
+                            i_tokenAddress,
+                            tokenToDeposit - tokenRecieved
+                        );
+                    }
+                } else {
+                    if (tokenRecieved - tokenToDeposit > 1e6) {
+                        swapExactAssetToStable(
+                            i_tokenAddress,
+                            tokenRecieved - tokenToDeposit
+                        );
+                    }
+                }
+            }
+
+            (amountToken, amountUsd) = calculatePoolReserves(uint128(1e18));
+
+            uint256 usdRemained = TransferHelper.safeGetBalance(i_usdAddress) -
+                s_cetraFeeUsd;
+            if ((tokenToDeposit * amountUsd) / amountToken > usdRemained) {
+                i_aaveV3Pool.withdraw(
+                    i_usdAddress,
+                    (tokenToDeposit * amountUsd) / amountToken - usdRemained,
+                    address(this)
+                );
+            } else {
+                i_aaveV3Pool.supply(
+                    i_usdAddress,
+                    usdRemained - (tokenToDeposit * amountUsd) / amountToken,
+                    address(this),
+                    0
+                );
+            }
+
             uint128 liquidityMinted = LiquidityAmounts.getLiquidityForAmounts(
                 getSqrtRatioX96(),
                 MathHelper.getSqrtRatioAtTick(s_lowerTick),
                 MathHelper.getSqrtRatioAtTick(s_upperTick),
-                (usdAmount - UsdToSupply),
-                tokenRecieved
+                tokenToDeposit,
+                (tokenToDeposit * amountUsd) / amountToken
             );
 
             i_uniswapPool.mint(
@@ -304,248 +340,175 @@ contract ChamberV1Stable is
                 ""
             );
         }
+        s_liquidityTokenId = true;
     }
 
-    // function _burn(uint256 _shares) private {
-    //     (
-    //         uint256 burnToken0,
-    //         uint256 burnToken1,
-    //         uint256 feeToken0,
-    //         uint256 feeToken1
-    //     ) = _withdraw(uint128((getLiquidity() * _shares) / s_totalShares));
-    //     _applyFees(feeToken0, feeToken1);
+    function _burn(uint256 _shares) private {
+        (uint256 burnToken, , uint256 feeToken, uint256 feeUsd) = _withdraw(
+            uint128((getLiquidity() * _shares) / s_totalShares)
+        );
+        _applyFees(feeToken, feeUsd);
 
-    //     uint256 amountToken0 = burnToken0 +
-    //         ((TransferHelper.safeGetBalance(i_token0Address) -
-    //             burnToken0 -
-    //             s_cetraFeeToken0) * _shares) /
-    //         s_totalShares;
-    //     uint256 amountToken1 = burnToken1 +
-    //         ((TransferHelper.safeGetBalance(i_token1Address) -
-    //             burnToken1 -
-    //             s_cetraFeeToken1) * _shares) /
-    //         s_totalShares;
+        uint256 amountToken = burnToken +
+            ((TransferHelper.safeGetBalance(i_tokenAddress) -
+                burnToken -
+                s_cetraFeeToken) * _shares) /
+            s_totalShares;
 
-    //     {
-    //         (
-    //             uint256 token0Remainder,
-    //             uint256 token1Remainder
-    //         ) = _repayAndWithdraw(_shares, amountToken0, amountToken1);
-    //         if (token0Remainder > 0) {
-    //             swapExactAssetToStable(i_token0Address, token0Remainder);
-    //         }
-    //         if (token1Remainder > 0) {
-    //             swapExactAssetToStable(i_token1Address, token1Remainder);
-    //         }
-    //     }
-    // }
+        {
+            uint256 tokenRemainder = _repayAndWithdraw(_shares, amountToken);
+            if (tokenRemainder > 0) {
+                swapExactAssetToStable(i_tokenAddress, tokenRemainder);
+            }
+        }
+    }
 
-    // function rebalance() private {
-    //     s_liquidityTokenId = false;
-    //     _burn(s_totalShares);
-    //     _mint(TransferHelper.safeGetBalance(i_usdAddress));
-    // }
+    function rebalance() private {
+        s_liquidityTokenId = false;
+        _burn(s_totalShares);
+        _mint(TransferHelper.safeGetBalance(i_usdAddress) - s_cetraFeeUsd);
+    }
 
     // =================================
     // Private funcitons
     // =================================
 
-    // function _repayAndWithdraw(
-    //     uint256 _shares,
-    //     uint256 token0OwnedByUser,
-    //     uint256 token1OwnedByUser
-    // ) private returns (uint256, uint256) {
-    //     uint256 token1DebtToCover = (getVToken1Balance() * _shares) /
-    //         s_totalShares;
-    //     uint256 token0DebtToCover = (getVToken0Balance() * _shares) /
-    //         s_totalShares;
-    //     uint256 token1BalanceBefore = TransferHelper.safeGetBalance(
-    //         i_token1Address
-    //     );
-    //     uint256 token0BalanceBefore = TransferHelper.safeGetBalance(
-    //         i_token0Address
-    //     );
-    //     uint256 token1Remainder;
-    //     uint256 token0Remainder;
+    function _repayAndWithdraw(
+        uint256 _shares,
+        uint256 tokenOwnedByUser
+    ) private returns (uint256) {
+        uint256 tokenDebtToCover = (getVTokenBalance() * _shares) /
+            s_totalShares;
 
-    //     uint256 token0Swapped = 0;
-    //     uint256 usdSwapped = 0;
+        uint256 tokenBalanceBefore = TransferHelper.safeGetBalance(
+            i_tokenAddress
+        );
 
-    //     uint256 _currentLTV = currentLTV();
-    //     if (token1OwnedByUser < token1DebtToCover) {
-    //         token0Swapped += swapAssetToExactAsset(
-    //             i_token0Address,
-    //             i_token1Address,
-    //             token1DebtToCover - token1OwnedByUser
-    //         );
-    //         if (
-    //             token1OwnedByUser +
-    //                 TransferHelper.safeGetBalance(i_token1Address) -
-    //                 token1BalanceBefore <
-    //             token1DebtToCover
-    //         ) {
-    //             revert ChamberV1__SwappedToken0ForToken1StillCantRepay();
-    //         }
-    //     }
-    //     i_aaveV3Pool.repay(
-    //         i_token1Address,
-    //         token1DebtToCover,
-    //         2,
-    //         address(this)
-    //     );
-    //     if (
-    //         TransferHelper.safeGetBalance(i_token1Address) >=
-    //         token1BalanceBefore - token1OwnedByUser
-    //     ) {
-    //         token1Remainder =
-    //             TransferHelper.safeGetBalance(i_token1Address) +
-    //             token1OwnedByUser -
-    //             token1BalanceBefore;
-    //     } else {
-    //         revert ChamberV1__UserRepaidMoreToken1ThanOwned();
-    //     }
+        uint256 tokenRemainder;
 
-    //     i_aaveV3Pool.withdraw(
-    //         i_usdAddress,
-    //         (((1e6 * token1DebtToCover * getToken1OraclePrice()) /
-    //             getUsdOraclePrice()) / _currentLTV),
-    //         address(this)
-    //     );
+        uint256 _currentLTV = currentLTV();
+        if (tokenOwnedByUser < tokenDebtToCover) {
+            swapStableToExactAsset(
+                i_tokenAddress,
+                tokenDebtToCover - tokenOwnedByUser
+            );
+            if (
+                tokenOwnedByUser +
+                    TransferHelper.safeGetBalance(i_tokenAddress) -
+                    tokenBalanceBefore <
+                tokenDebtToCover
+            ) {
+                revert ChamberV1__SwappedUsdForTokenStillCantRepay();
+            }
+        }
+        i_aaveV3Pool.repay(i_tokenAddress, tokenDebtToCover, 2, address(this));
+        if (
+            TransferHelper.safeGetBalance(i_tokenAddress) >=
+            tokenBalanceBefore - tokenOwnedByUser
+        ) {
+            tokenRemainder =
+                TransferHelper.safeGetBalance(i_tokenAddress) +
+                tokenOwnedByUser -
+                tokenBalanceBefore;
+        } else {
+            revert ChamberV1__UserRepaidMoreTokenThanOwned();
+        }
 
-    //     if (token0OwnedByUser < token0DebtToCover + token0Swapped) {
-    //         usdSwapped += swapStableToExactAsset(
-    //             i_token0Address,
-    //             token0DebtToCover + token0Swapped - token0OwnedByUser
-    //         );
-    //         if (
-    //             (token0OwnedByUser +
-    //                 TransferHelper.safeGetBalance(i_token0Address)) -
-    //                 token0BalanceBefore <
-    //             token0DebtToCover
-    //         ) {
-    //             revert ChamberV1__SwappedUsdForToken0StillCantRepay();
-    //         }
-    //     }
+        i_aaveV3Pool.withdraw(
+            i_usdAddress,
+            (((USD_RATE * tokenDebtToCover * getTokenOraclePrice()) /
+                getUsdOraclePrice()) / _currentLTV),
+            address(this)
+        );
+        return (tokenRemainder);
+    }
 
-    //     i_aaveV3Pool.repay(
-    //         i_token0Address,
-    //         token0DebtToCover,
-    //         2,
-    //         address(this)
-    //     );
+    function swapExactAssetToStable(
+        address assetIn,
+        uint256 amountIn
+    ) private returns (uint256) {
+        uint256 amountOut = i_uniswapSwapRouter.exactInput(
+            ISwapRouter.ExactInputParams({
+                path: abi.encodePacked(assetIn, uint24(500), i_usdAddress),
+                recipient: address(this),
+                deadline: block.timestamp,
+                amountIn: amountIn,
+                amountOutMinimum: 0
+            })
+        );
+        return (amountOut);
+    }
 
-    //     if (
-    //         TransferHelper.safeGetBalance(i_token0Address) >=
-    //         token0BalanceBefore - token0OwnedByUser
-    //     ) {
-    //         token0Remainder =
-    //             TransferHelper.safeGetBalance(i_token0Address) +
-    //             token0OwnedByUser -
-    //             token0BalanceBefore;
-    //     } else {
-    //         revert ChamberV1__UserRepaidMoreToken0ThanOwned();
-    //     }
+    function swapStableToExactAsset(
+        address assetOut,
+        uint256 amountOut
+    ) private returns (uint256) {
+        uint256 amountIn = i_uniswapSwapRouter.exactOutput(
+            ISwapRouter.ExactOutputParams({
+                path: abi.encodePacked(assetOut, uint24(500), i_usdAddress),
+                recipient: address(this),
+                deadline: block.timestamp,
+                amountOut: amountOut,
+                amountInMaximum: 1e50
+            })
+        );
+        return (amountIn);
+    }
 
-    //     i_aaveV3Pool.withdraw(
-    //         i_usdAddress,
-    //         (((1e6 * token0DebtToCover * getToken0OraclePrice()) /
-    //             getUsdOraclePrice()) / _currentLTV),
-    //         address(this)
-    //     );
+    function swapAssetToExactAsset(
+        address assetIn,
+        address assetOut,
+        uint256 amountOut
+    ) private returns (uint256) {
+        uint256 amountIn = i_uniswapSwapRouter.exactOutput(
+            ISwapRouter.ExactOutputParams({
+                path: abi.encodePacked(
+                    assetOut,
+                    uint24(500),
+                    i_usdAddress,
+                    uint24(500),
+                    assetIn
+                ),
+                recipient: address(this),
+                deadline: block.timestamp,
+                amountOut: amountOut,
+                amountInMaximum: type(uint256).max
+            })
+        );
 
-    //     return (token0Remainder, token1Remainder);
-    // }
+        return (amountIn);
+    }
 
-    // function swapExactAssetToStable(
-    //     address assetIn,
-    //     uint256 amountIn
-    // ) private returns (uint256) {
-    //     uint256 amountOut = i_uniswapSwapRouter.exactInput(
-    //         ISwapRouter.ExactInputParams({
-    //             path: abi.encodePacked(assetIn, uint24(500), i_usdAddress),
-    //             recipient: address(this),
-    //             deadline: block.timestamp,
-    //             amountIn: amountIn,
-    //             amountOutMinimum: 0
-    //         })
-    //     );
-    //     return (amountOut);
-    // }
+    function _withdraw(
+        uint128 liquidityToBurn
+    ) private returns (uint256, uint256, uint256, uint256) {
+        uint256 preBalanceUsd = TransferHelper.safeGetBalance(i_usdAddress);
+        uint256 preBalanceToken = TransferHelper.safeGetBalance(i_tokenAddress);
+        (uint256 burnToken, uint256 burnUsd) = i_uniswapPool.burn(
+            s_lowerTick,
+            s_upperTick,
+            liquidityToBurn
+        );
+        i_uniswapPool.collect(
+            address(this),
+            s_lowerTick,
+            s_upperTick,
+            type(uint128).max,
+            type(uint128).max
+        );
+        uint256 feeUsd = TransferHelper.safeGetBalance(i_usdAddress) -
+            preBalanceUsd -
+            burnUsd;
+        uint256 feeToken = TransferHelper.safeGetBalance(i_tokenAddress) -
+            preBalanceToken -
+            burnToken;
+        return (burnToken, burnUsd, feeToken, feeUsd);
+    }
 
-    // function swapStableToExactAsset(
-    //     address assetOut,
-    //     uint256 amountOut
-    // ) private returns (uint256) {
-    //     uint256 amountIn = i_uniswapSwapRouter.exactOutput(
-    //         ISwapRouter.ExactOutputParams({
-    //             path: abi.encodePacked(assetOut, uint24(500), i_usdAddress),
-    //             recipient: address(this),
-    //             deadline: block.timestamp,
-    //             amountOut: amountOut,
-    //             amountInMaximum: 1e50
-    //         })
-    //     );
-    //     return (amountIn);
-    // }
-
-    // function swapAssetToExactAsset(
-    //     address assetIn,
-    //     address assetOut,
-    //     uint256 amountOut
-    // ) private returns (uint256) {
-    //     uint256 amountIn = i_uniswapSwapRouter.exactOutput(
-    //         ISwapRouter.ExactOutputParams({
-    //             path: abi.encodePacked(
-    //                 assetOut,
-    //                 uint24(500),
-    //                 i_usdAddress,
-    //                 uint24(500),
-    //                 assetIn
-    //             ),
-    //             recipient: address(this),
-    //             deadline: block.timestamp,
-    //             amountOut: amountOut,
-    //             amountInMaximum: type(uint256).max
-    //         })
-    //     );
-
-    //     return (amountIn);
-    // }
-
-    // function _withdraw(
-    //     uint128 liquidityToBurn
-    // ) private returns (uint256, uint256, uint256, uint256) {
-    //     uint256 preBalanceToken1 = TransferHelper.safeGetBalance(
-    //         i_token1Address
-    //     );
-    //     uint256 preBalanceToken0 = TransferHelper.safeGetBalance(
-    //         i_token0Address
-    //     );
-    //     (uint256 burnToken0, uint256 burnToken1) = i_uniswapPool.burn(
-    //         s_lowerTick,
-    //         s_upperTick,
-    //         liquidityToBurn
-    //     );
-    //     i_uniswapPool.collect(
-    //         address(this),
-    //         s_lowerTick,
-    //         s_upperTick,
-    //         type(uint128).max,
-    //         type(uint128).max
-    //     );
-    //     uint256 feeToken1 = TransferHelper.safeGetBalance(i_token1Address) -
-    //         preBalanceToken1 -
-    //         burnToken1;
-    //     uint256 feeToken0 = TransferHelper.safeGetBalance(i_token0Address) -
-    //         preBalanceToken0 -
-    //         burnToken0;
-    //     return (burnToken0, burnToken1, feeToken0, feeToken1);
-    // }
-
-    // function _applyFees(uint256 _feeToken0, uint256 _feeToken1) private {
-    //     s_cetraFeeToken0 += (_feeToken0 * CETRA_FEE) / PRECISION;
-    //     s_cetraFeeToken1 += (_feeToken1 * CETRA_FEE) / PRECISION;
-    // }
+    function _applyFees(uint256 _feeToken, uint256 _feeUsd) private {
+        s_cetraFeeUsd += (_feeUsd * CETRA_FEE) / PRECISION;
+        s_cetraFeeToken += (_feeToken * CETRA_FEE) / PRECISION;
+    }
 
     // =================================
     // View funcitons
@@ -557,35 +520,49 @@ contract ChamberV1Stable is
         override
         returns (uint256, uint256)
     {
-        return (s_cetraFeeUsd, s_cetraFeeToken);
+        return (s_cetraFeeToken, s_cetraFeeUsd);
     }
 
     function currentUSDBalance() public view override returns (uint256) {
         (
-            uint256 usdPoolBalance,
-            uint256 tokenPoolBalance
+            uint256 tokenPoolBalance,
+            uint256 usdPoolBalance
         ) = calculateCurrentPoolReserves();
         (
-            uint256 usdFeePending,
-            uint256 tokenFeePending
+            uint256 tokenFeePending,
+            uint256 usdFeePending
         ) = calculateCurrentFees();
         uint256 pureUSDAmount = getAUSDTokenBalance() +
             TransferHelper.safeGetBalance(i_usdAddress);
-        uint256 poolTokensValue = ((usdPoolBalance +
-            usdFeePending -
-            s_cetraFeeUsd) *
-            getUsdOraclePrice() +
-            (tokenPoolBalance +
+        uint256 poolTokensValue = (usdPoolBalance + usdFeePending) +
+            (((tokenPoolBalance +
                 tokenFeePending +
-                TransferHelper.safeGetBalance(i_tokenAddress) -
-                s_cetraFeeToken) *
+                TransferHelper.safeGetBalance(i_tokenAddress)) *
+                getTokenOraclePrice()) /
+                getUsdOraclePrice() /
+                TOKEN_RATE) *
+            USD_RATE;
+        uint256 debtTokensValue = ((getVTokenBalance() *
             getTokenOraclePrice()) /
             getUsdOraclePrice() /
-            1e12;
-        uint256 debtTokensValue = (getVTokenBalance() * getTokenOraclePrice()) /
-            getUsdOraclePrice() /
-            1e12;
-        return pureUSDAmount + poolTokensValue - debtTokensValue;
+            TOKEN_RATE) * USD_RATE;
+        uint256 positiveBalanceWithFees = pureUSDAmount + poolTokensValue;
+        uint256 feesValue = s_cetraFeeUsd +
+            ((s_cetraFeeToken * getTokenOraclePrice()) /
+                getUsdOraclePrice() /
+                TOKEN_RATE) *
+            USD_RATE;
+
+        return
+            (positiveBalanceWithFees > debtTokensValue)
+                ? (
+                    (positiveBalanceWithFees - debtTokensValue > feesValue)
+                        ? (positiveBalanceWithFees -
+                            debtTokensValue -
+                            feesValue)
+                        : (0)
+                )
+                : (0);
     }
 
     function currentLTV() public view override returns (uint256) {
@@ -794,13 +771,13 @@ contract ChamberV1Stable is
         }
 
         if (amount0Owed > 0)
-            TransferHelper.safeTransfer(i_usdAddress, msg.sender, amount0Owed);
-        if (amount1Owed > 0)
             TransferHelper.safeTransfer(
                 i_tokenAddress,
                 msg.sender,
-                amount1Owed
+                amount0Owed
             );
+        if (amount1Owed > 0)
+            TransferHelper.safeTransfer(i_usdAddress, msg.sender, amount1Owed);
     }
 
     receive() external payable {}
@@ -810,10 +787,10 @@ contract ChamberV1Stable is
     // =================================
 
     function _redeemFees() external override onlyOwner {
-        //     TransferHelper.safeTransfer(i_token1Address, owner(), s_cetraFeeToken1);
-        //     TransferHelper.safeTransfer(i_token0Address, owner(), s_cetraFeeToken0);
-        //     s_cetraFeeToken1 = 0;
-        //     s_cetraFeeToken0 = 0;
+        TransferHelper.safeTransfer(i_usdAddress, owner(), s_cetraFeeUsd);
+        TransferHelper.safeTransfer(i_tokenAddress, owner(), s_cetraFeeToken);
+        s_cetraFeeUsd = 0;
+        s_cetraFeeToken = 0;
     }
 
     function setTicksRange(int24 _ticksRange) external override onlyOwner {

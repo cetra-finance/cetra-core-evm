@@ -15,27 +15,34 @@ require("hardhat-tracer");
 require("dotenv").config();
 
 const CUSTOM_RPC_URL = process.env.CUSTOM_RPC_URL || "";
+const RPC_URL_ARBITRUM = process.env.RPC_URL_ARBITRUM || "";
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
+const ARBISCAN_API_KEY = process.env.ARBISCAN_API_KEY || "";
 const PRIVATE_KEY = process.env.PRIVATE_KEY || "";
 
 module.exports = {
     defaultNetwork: "hardhat",
     networks: {
         hardhat: {
-            chainId: 31337,
+            chainId: 42161,
            forking: {
-                url: CUSTOM_RPC_URL,
-                blockNumber: 39854691
+                url: RPC_URL_ARBITRUM,
+                //blockNumber: 39854691
            }
         },
         matic: {
             chainId:137,
             url: CUSTOM_RPC_URL,
             accounts: [PRIVATE_KEY],
+        },
+        arbitrum: {
+            chainId:42161,
+            url: RPC_URL_ARBITRUM,
+            accounts: [PRIVATE_KEY],
         }
     },
     etherscan: {
-        apiKey: ETHERSCAN_API_KEY
+        apiKey: ARBISCAN_API_KEY
     },
     namedAccounts: {
         deployer: {

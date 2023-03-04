@@ -6,7 +6,7 @@ const helpers = require("@nomicfoundation/hardhat-network-helpers");
 const { mine } = require("@nomicfoundation/hardhat-network-helpers");
 const JSBI = require("jsbi");
 
-describe("usdcEth", function () {
+describe("ethUsdc", function () {
     let owner, _, user1, user2, donorWallet;
     let usd, weth, aUSD, vWETH;
     let aaveOracle, UniRouter;
@@ -60,79 +60,13 @@ describe("usdcEth", function () {
         }
     };
 
-    const setNewOraclePrice = async (asset, newPrice) => {
-        await helpers.impersonateAccount(
-            "0xdc9a35b16db4e126cfedc41322b3a36454b1f772"
-        );
-        oracleOwner = await ethers.getSigner(
-            "0xdc9a35b16db4e126cfedc41322b3a36454b1f772"
-        );
-
-        await helpers.setBalance(
-            oracleOwner.address,
-            ethers.utils.parseEther("1000")
-        );
-
-        const OracleReplaceFactory = await ethers.getContractFactory(
-            "AaveOracleReplace"
-        );
-        const oracleReplace = await OracleReplaceFactory.deploy(newPrice);
-
-        await aaveOracle
-            .connect(oracleOwner)
-            .setAssetSources([asset.address], [oracleReplace.address]);
-    };
-
-    const getPriceFromPair = async (
-        token0,
-        token1,
-        poolFee,
-        decimals0,
-        decimals1
-    ) => {
-        const factoryAddress = await UniRouter.factory();
-        const factory = await ethers.getContractAt(
-            "IUniswapV3Factory",
-            factoryAddress
-        );
-        const poolAddress = await factory.getPool(
-            token0.address,
-            token1.address,
-            poolFee
-        );
-        const pool = await ethers.getContractAt("IUniswapV3Pool", poolAddress);
-        const sqrt = await pool.slot0();
-        const token0Price =
-            (sqrt[0] * sqrt[0] * decimals0) /
-            decimals1 /
-            JSBI.BigInt(2) ** JSBI.BigInt(192);
-        const token1Price =
-            ((JSBI.BigInt(2) ** JSBI.BigInt(192) / sqrt[0] / sqrt[0]) *
-                decimals1) /
-            decimals0;
-        return [token0Price, token1Price];
-    };
-
     // =================================
     // Main functions
     // =================================
 
     const makeDeposit = async (user, amount) => {
-        // const contractBalanceBefore = await chamber.currentUSDBalance();
-        // const userInnerBalanceBefore = await chamber.sharesWorth(
-        //     await chamber.get_s_userShares(user.address)
-        // );
         await chamber.connect(user).mint(amount);
         console.log("contract balance", await chamber.currentUSDBalance());
-        // expect(await chamber.currentUSDBalance()).to.be.closeTo(
-        //     contractBalanceBefore.add(amount),
-        //     100000
-        // );
-        // expect(
-        //     await chamber.sharesWorth(
-        //         await chamber.get_s_userShares(user.address)
-        //     )
-        // ).to.be.closeTo(userInnerBalanceBefore.add(amount), 100000);
     };
 
     const makeBurn = async (user, amount) => {
@@ -190,7 +124,7 @@ describe("usdcEth", function () {
     before(async () => {
         console.log(network.config.chainId);
         console.log("DEPLOYING VAULT, FUNDING USER ACCOUNTS...");
-        const currNetworkConfig = networkConfig[network.config.chainId + 4];
+        const currNetworkConfig = networkConfig[network.config.chainId];
         accounts = await ethers.getSigners();
         owner = accounts[0];
         user1 = accounts[1];
@@ -221,7 +155,7 @@ describe("usdcEth", function () {
         );
 
         const chamberFactory = await ethers.getContractFactory(
-            "ChamberV1Stable"
+            "ChamberV1VolStable"
         );
         chamber = await chamberFactory.deploy(
             currNetworkConfig.uniswapRouterAddress,
@@ -245,16 +179,7 @@ describe("usdcEth", function () {
         donorWallet = await ethers.getSigner(
             currNetworkConfig.donorWalletAddress
         );
-        await helpers.impersonateAccount(currNetworkConfig.wethHolderAddress);
-        wethHolderWallet = await ethers.getSigner(
-            currNetworkConfig.wethHolderAddress
-        );
-        await weth
-            .connect(wethHolderWallet)
-            .transfer(
-                donorWallet.address,
-                weth.balanceOf(currNetworkConfig.wethHolderAddress)
-            );
+        console.log(await usd.balanceOf(donorWallet.address));
 
         await usd
             .connect(donorWallet)
@@ -295,6 +220,9 @@ describe("usdcEth", function () {
         await chamber
             .connect(owner)
             .giveApprove(weth.address, currNetworkConfig.uniswapPoolAddress);
+        console.log(await usd.balanceOf(owner.address));
+        console.log(await usd.balanceOf(user1.address));
+        console.log(await usd.balanceOf(user2.address));
     });
 
     describe("every user mints", async function () {
