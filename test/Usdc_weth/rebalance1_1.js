@@ -318,41 +318,22 @@ describe("usdcEth", function () {
             .giveApprove(usd.address, currNetworkConfig.aaveV3PoolAddress);
         await chamber
             .connect(owner)
-            .giveApprove(usd.address, currNetworkConfig.uniswapRouterAddress);
-        await chamber
-            .connect(owner)
-            .giveApprove(usd.address, currNetworkConfig.uniswapPoolAddress);
-        await chamber
-            .connect(owner)
             .giveApprove(usd.address, currNetworkConfig.aaveVWETHAddress);
-
+    
         await chamber
             .connect(owner)
             .giveApprove(weth.address, currNetworkConfig.aaveV3PoolAddress);
-        await chamber
-            .connect(owner)
-            .giveApprove(weth.address, currNetworkConfig.uniswapRouterAddress);
         await chamber
             .connect(owner)
             .giveApprove(weth.address, currNetworkConfig.uniswapPoolAddress);
         await chamber
             .connect(owner)
             .giveApprove(weth.address, currNetworkConfig.aaveVWETHAddress);
-
-        // await chamber
-        //     .connect(owner)
-        //     .giveApprove(wmatic.address, currNetworkConfig.aaveV3PoolAddress);
-        // await chamber
-        //     .connect(owner)
-        //     .giveApprove(
-        //         wmatic.address,
-        //         currNetworkConfig.uniswapRouterAddress
-        //     );
     });
 
     describe("every user mints", async function () {
         it("owner mints 1000$", async function () {
-            await makeDeposit(owner, 1000 * 1e6);
+            await makeDeposit(owner, 5 * 1e6);
         });
 
         // it("user1 mints 1500$", async function () {

@@ -228,8 +228,8 @@ contract ChamberV1Stable is
         int24 currentTick = getTick();
 
         if (!s_liquidityTokenId) {
-            s_lowerTick = ((currentTick - s_ticksRange) / 60) * 60;
-            s_upperTick = ((currentTick + s_ticksRange) / 60) * 60;
+            s_lowerTick = ((currentTick - s_ticksRange) / 10) * 10;
+            s_upperTick = ((currentTick + s_ticksRange) / 10) * 10;
             usedLTV = s_targetLTV;
             s_liquidityTokenId = true;
         } else {
@@ -570,19 +570,38 @@ contract ChamberV1Stable is
             uint256 tokenFeePending
         ) = calculateCurrentFees();
 
-        uint256 pureUSDAmount = getAUSDTokenBalance() + TransferHelper.safeGetBalance(i_usdAddress);
-        uint256 poolTokensValue = (usdPoolBalance +
+        console.log(usdPoolBalance);
+        console.log(usdFeePending);
+        console.log(s_cetraFeeUsd);
+        console.log((usdPoolBalance +
                 usdFeePending -
                 s_cetraFeeUsd) *
-            getUsdOraclePrice() /
-            1e18 +
+            getUsdOraclePrice() / 1e18);
+
+        console.log(((tokenPoolBalance +
+                tokenFeePending +
+                TransferHelper.safeGetBalance(i_tokenAddress) -
+                s_cetraFeeToken) *
+            getTokenOraclePrice() / 1e12) /
+            1e18);
+
+        uint256 pureUSDAmount = getAUSDTokenBalance() + TransferHelper.safeGetBalance(i_usdAddress);
+        uint256 poolTokensValue = ((usdPoolBalance +
+                usdFeePending -
+                s_cetraFeeUsd) *
+            getUsdOraclePrice() +
             (tokenPoolBalance +
                 tokenFeePending +
                 TransferHelper.safeGetBalance(i_tokenAddress) -
                 s_cetraFeeToken) *
-            getTokenOraclePrice() / 1e30;
+            getTokenOraclePrice() / 1e12) /
+            1e18;
         uint256 debtTokensValue = (getVTokenBalance() * getTokenOraclePrice()) /
             1e30;
+
+        console.log("pureUSDAmount", pureUSDAmount);
+        console.log("poolTokensValue", poolTokensValue);
+        console.log("debtTokensValue", debtTokensValue);
 
         return pureUSDAmount + poolTokensValue - debtTokensValue;
     }

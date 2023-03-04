@@ -23,10 +23,10 @@ module.exports = {
     networks: {
         hardhat: {
             chainId: 31337,
-           forking: {
+            forking: {
                 url: CUSTOM_RPC_URL,
-                blockNumber: 39854691
-           }
+                blockNumber: 39926847
+            }
         },
         matic: {
             chainId:137,
