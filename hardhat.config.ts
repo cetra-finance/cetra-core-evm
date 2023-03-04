@@ -6,6 +6,7 @@ require("@nomiclabs/hardhat-waffle");
 require("@nomiclabs/hardhat-ethers");
 require("@nomiclabs/hardhat-truffle5");
 require("@nomiclabs/hardhat-etherscan");
+
 require("hardhat-deploy");
 require("@nomicfoundation/hardhat-network-helpers");
 require("hardhat-gas-reporter");
@@ -17,21 +18,27 @@ require("dotenv").config();
 const CUSTOM_RPC_URL = process.env.CUSTOM_RPC_URL || "";
 const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
 const PRIVATE_KEY = process.env.PRIVATE_KEY || "";
+const RPC_URL_OPTIMISM = process.env.RPC_URL_OPTIMISM || "";
 
 module.exports = {
     defaultNetwork: "hardhat",
     networks: {
         hardhat: {
-            chainId: 31337,
+        chainId: 10,
            forking: {
-                url: CUSTOM_RPC_URL,
-                blockNumber: 39126878
+                url: RPC_URL_OPTIMISM,
+                blockNumber: 78438718,
            }
         },
         matic: {
             chainId:137,
             url: CUSTOM_RPC_URL,
             accounts: [PRIVATE_KEY],
+        },
+        optimism: {
+            chainId:10,
+            url:RPC_URL_OPTIMISM,
+            accounts:[PRIVATE_KEY]
         }
     },
     etherscan: {

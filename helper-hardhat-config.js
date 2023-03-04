@@ -102,6 +102,25 @@ const networkConfig = {
         aaveAUSDCAddress: "0x625E7708f30cA75bfd92586e17077590C60eb4cD",
         hedgeDev: "200000000000000000",
     },
+    10: {
+        name: "optimism",
+        donorWalletAddress: "0xebe80f029b1c02862b9e8a70a7e5317c06f62cae",
+        sonneComptrollerAddress: "0x60CF091cD3f50420d50fD7f707414d0DF4751C58",
+        sonnePriceOracle: "0xEFc0495DA3E48c5A55F73706b249FD49d711A502",
+        soUSDC: "0xEC8FEa79026FfEd168cCf5C627c7f486D77b765F",
+        soSNX: "0xD7dAabd899D1fAbbC3A9ac162568939CEc0393Cc",
+        soWETH: "0xf7B5965f5C117Eb1B5450187c9DcFccc3C317e8E",
+        usdcAddress: "0x7f5c764cbc14f9669b88837ca1490cca17c31607",
+        uniswapPoolAddress: "0x0392b358ce4547601befa962680bede836606ae2",
+        uniswapRouterAddress: "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+        snxAddress: "0x8700daec35af8ff88c16bdf0418774cb3d7599b4",
+        wethAddress: "0x4200000000000000000000000000000000000006",
+        hedgeDev: "200000000000000000",
+        targetLTV: "690000000000000000",
+        minLTV: "600000000000000000",
+        maxLTV: "750000000000000000",
+        ticksRange: "4100",
+    },
 };
 
 const developmentChains = ["hardhat", "fork"];
