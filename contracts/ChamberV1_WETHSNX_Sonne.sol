@@ -21,6 +21,7 @@ import "./TransferHelper.sol";
 import "./MathHelper.sol";
 
 import "./IChamberV1.sol";
+import "./swapHelpers/ISwapHelper.sol";
 
 /*Errors */
 error ChamberV1__ReenterancyGuard();
@@ -72,6 +73,8 @@ contract ChamberV1_WETHSNX_Sonne is
 
     int24 private s_ticksRange;
 
+    ISwapHelper private immutable s_swapHelper;
+
     address private constant i_usdcAddress = 0x7F5c764cBc14f9669B88837ca1490cCa17c31607;
     address private constant i_token0Address = 0x4200000000000000000000000000000000000006;
     address private constant i_token1Address = 0x8700dAec35aF8Ff88c16BdF0418774CB3D7599B4;
@@ -83,7 +86,7 @@ contract ChamberV1_WETHSNX_Sonne is
     PriceOracle private constant i_sonneOracle = PriceOracle(0xEFc0495DA3E48c5A55F73706b249FD49d711A502);
     IComptroller private constant i_sonneComptroller = IComptroller(0x60CF091cD3f50420d50fD7f707414d0DF4751C58);
 
-    ISwapRouter private constant i_uniswapSwapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+    // ISwapRouter private constant i_uniswapSwapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
     IUniswapV3Pool private constant i_uniswapPool = IUniswapV3Pool(0x0392b358CE4547601BEFa962680BedE836606ae2);
 
     uint256 private constant USDC_RATE = 1e6;
@@ -116,8 +119,10 @@ contract ChamberV1_WETHSNX_Sonne is
     // =================================
 
     constructor(
+        address _swapHelper,
         int24 _ticksRange
     ) {
+        s_swapHelper = ISwapHelper(_swapHelper);
         unlocked = true;
         s_ticksRange = _ticksRange;
 
@@ -345,10 +350,10 @@ contract ChamberV1_WETHSNX_Sonne is
                 uint256 token1Remainder
             ) = _repayAndWithdraw(_shares, amountToken0, amountToken1);
             if (token0Remainder > 0) {
-                swapExactAssetToStable(i_token0Address, token0Remainder);
+                s_swapHelper.swapExactAssetToStable(i_token0Address, token0Remainder);
             }
             if (token1Remainder > 0) {
-                swapExactAssetToStable(i_token1Address, token1Remainder);
+                s_swapHelper.swapExactAssetToStable(i_token1Address, token1Remainder);
             }
         }
     }
@@ -388,7 +393,7 @@ contract ChamberV1_WETHSNX_Sonne is
         uint256 token0Swapped = 0;
 
         if (token1OwnedByUser < token1DebtToCover) {
-            token0Swapped += swapAssetToExactAsset(
+            token0Swapped += s_swapHelper.swapAssetToExactAsset(
                 i_token0Address,
                 i_token1Address,
                 token1DebtToCover - token1OwnedByUser
@@ -412,7 +417,8 @@ contract ChamberV1_WETHSNX_Sonne is
         );
 
         if (token0OwnedByUser < token0DebtToCover + token0Swapped) {
-            swapStableToExactAsset(
+            s_swapHelper.swapStableToExactAsset(
+                i_token0Address,
                 token0DebtToCover + token0Swapped - token0OwnedByUser
             );
             if (
@@ -462,74 +468,74 @@ contract ChamberV1_WETHSNX_Sonne is
         return (token0Remainder, token1Remainder);
     }
 
-    function swapExactAssetToStable(
-        address assetIn,
-        uint256 amountIn
-    ) private {
-        if (assetIn == i_token0Address) {
-            i_uniswapSwapRouter.exactInput(
-                ISwapRouter.ExactInputParams({
-                    path: abi.encodePacked(assetIn, uint24(500), i_usdcAddress),
-                    recipient: address(this),
-                    deadline: block.timestamp,
-                    amountIn: amountIn,
-                    amountOutMinimum: 0
-                })
-            );
-        } else {
-            i_uniswapSwapRouter.exactInput(
-                ISwapRouter.ExactInputParams({
-                    path: abi.encodePacked(
-                        assetIn,
-                        uint24(3000),
-                        i_token0Address,
-                        uint24(500),
-                        i_usdcAddress
-                    ),
-                    recipient: address(this),
-                    deadline: block.timestamp,
-                    amountIn: amountIn,
-                    amountOutMinimum: 0
-                })
-            );
-        }
-    }
+    // function swapExactAssetToStable(
+    //     address assetIn,
+    //     uint256 amountIn
+    // ) private {
+    //     if (assetIn == i_token0Address) {
+    //         i_uniswapSwapRouter.exactInput(
+    //             ISwapRouter.ExactInputParams({
+    //                 path: abi.encodePacked(assetIn, uint24(500), i_usdcAddress),
+    //                 recipient: address(this),
+    //                 deadline: block.timestamp,
+    //                 amountIn: amountIn,
+    //                 amountOutMinimum: 0
+    //             })
+    //         );
+    //     } else {
+    //         i_uniswapSwapRouter.exactInput(
+    //             ISwapRouter.ExactInputParams({
+    //                 path: abi.encodePacked(
+    //                     assetIn,
+    //                     uint24(3000),
+    //                     i_token0Address,
+    //                     uint24(500),
+    //                     i_usdcAddress
+    //                 ),
+    //                 recipient: address(this),
+    //                 deadline: block.timestamp,
+    //                 amountIn: amountIn,
+    //                 amountOutMinimum: 0
+    //             })
+    //         );
+    //     }
+    // }
 
-    function swapStableToExactAsset(
-        uint256 amountOut
-    ) private {
-        i_uniswapSwapRouter.exactOutput(
-            ISwapRouter.ExactOutputParams({
-                path: abi.encodePacked(
-                    i_token0Address,
-                    uint24(500),
-                    i_usdcAddress
-                ),
-                recipient: address(this),
-                deadline: block.timestamp,
-                amountOut: amountOut,
-                amountInMaximum: 1e50
-            })
-        );
-    }
+    // function swapStableToExactAsset(
+    //     uint256 amountOut
+    // ) private {
+    //     i_uniswapSwapRouter.exactOutput(
+    //         ISwapRouter.ExactOutputParams({
+    //             path: abi.encodePacked(
+    //                 i_token0Address,
+    //                 uint24(500),
+    //                 i_usdcAddress
+    //             ),
+    //             recipient: address(this),
+    //             deadline: block.timestamp,
+    //             amountOut: amountOut,
+    //             amountInMaximum: 1e50
+    //         })
+    //     );
+    // }
 
-    function swapAssetToExactAsset(
-        address assetIn,
-        address assetOut,
-        uint256 amountOut
-    ) private returns (uint256) {
-        uint256 amountIn = i_uniswapSwapRouter.exactOutput(
-            ISwapRouter.ExactOutputParams({
-                path: abi.encodePacked(assetOut, uint24(3000), assetIn),
-                recipient: address(this),
-                deadline: block.timestamp,
-                amountOut: amountOut,
-                amountInMaximum: type(uint256).max
-            })
-        );
+    // function swapAssetToExactAsset(
+    //     address assetIn,
+    //     address assetOut,
+    //     uint256 amountOut
+    // ) private returns (uint256) {
+    //     uint256 amountIn = i_uniswapSwapRouter.exactOutput(
+    //         ISwapRouter.ExactOutputParams({
+    //             path: abi.encodePacked(assetOut, uint24(3000), assetIn),
+    //             recipient: address(this),
+    //             deadline: block.timestamp,
+    //             amountOut: amountOut,
+    //             amountInMaximum: type(uint256).max
+    //         })
+    //     );
 
-        return (amountIn);
-    }
+    //     return (amountIn);
+    // }
 
     function _withdraw(
         uint128 liquidityToBurn
