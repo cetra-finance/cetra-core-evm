@@ -15,6 +15,8 @@ import "./SonneInterfaces/IComptroller.sol";
 import "./SonneInterfaces/CTokenInterfaces.sol";
 import "./SonneInterfaces/PriceOracle.sol";
 
+import "./Velodrome/IRouter.sol";
+
 import "./TransferHelper.sol";
 import "./MathHelper.sol";
 
@@ -29,7 +31,7 @@ error ChamberV1__UserRepaidMoreToken1ThanOwned();
 error ChamberV1__SwappedUsdcForToken0StillCantRepay();
 error ChamberV1__SwappedToken0ForToken1StillCantRepay();
 error ChamberV1__CallerIsNotUniPool();
-error ChamberV1__sharesWorthMoreThenDep();
+error ChamberV1__sharesWorthMoreThanDep();
 error ChamberV1__TicksOut();
 error ChamberV1__UpkeepNotNeeded(uint256 _currentLTV, uint256 _totalShares);
 
@@ -92,6 +94,11 @@ contract ChamberV1_WETHSNX_Sonne is
     uint256 private constant PRECISION = 1e18;
     uint256 private constant CETRA_FEE = 5 * 1e16;
 
+    address private constant SONNE_ADDRESS =
+        0x1DB2466d9F5e10D7090E7152B68d62703a2245F0;
+    IRouter private constant VELO_ROUTER =
+        IRouter(0x9c12939390052919aF3155f41Bf4160Fd3666A6f);
+
     // ================================
     // Modifiers
     // =================================
@@ -147,6 +154,7 @@ contract ChamberV1_WETHSNX_Sonne is
 
     function mint(uint256 usdAmount) external override lock {
         {
+            _claimAndIncreaseCollateral();
             uint256 currUsdBalance = currentUSDBalance();
             uint256 sharesToMint = (currUsdBalance > 10)
                 ? ((usdAmount * s_totalShares) / (currUsdBalance))
@@ -154,7 +162,7 @@ contract ChamberV1_WETHSNX_Sonne is
             s_totalShares += sharesToMint;
             s_userShares[msg.sender] += sharesToMint;
             if (sharesWorth(sharesToMint) >= usdAmount) {
-                revert ChamberV1__sharesWorthMoreThenDep();
+                revert ChamberV1__sharesWorthMoreThanDep();
             }
             TransferHelper.safeTransferFrom(
                 i_usdcAddress,
@@ -167,6 +175,7 @@ contract ChamberV1_WETHSNX_Sonne is
     }
 
     function burn(uint256 _shares) external override lock {
+        _claimAndIncreaseCollateral();
         uint256 usdcBalanceBefore = TransferHelper.safeGetBalance(
             i_usdcAddress
         );
@@ -329,6 +338,7 @@ contract ChamberV1_WETHSNX_Sonne is
             uint256 feeToken0,
             uint256 feeToken1
         ) = _withdraw(uint128((getLiquidity() * _shares) / s_totalShares));
+
         _applyFees(feeToken0, feeToken1);
 
         uint256 amountToken0 = burnToken0 +
@@ -371,121 +381,134 @@ contract ChamberV1_WETHSNX_Sonne is
         uint256 token0OwnedByUser,
         uint256 token1OwnedByUser
     ) private returns (uint256, uint256) {
-        return (0, 0);
-        // uint256 token1DebtToCover = (getVToken1Balance() * _shares) /
-        //     s_totalShares;
-        // uint256 token0DebtToCover = (getVToken0Balance() * _shares) /
-        //     s_totalShares;
-        // uint256 token1BalanceBefore = TransferHelper.safeGetBalance(
-        //     i_token1Address
-        // );
-        // uint256 token0BalanceBefore = TransferHelper.safeGetBalance(
-        //     i_token0Address
-        // );
-        // uint256 token1Remainder;
-        // uint256 token0Remainder;
+        uint256 token1Remainder;
+        uint256 token0Remainder;
 
-        // uint256 token0Swapped = 0;
-        // uint256 usdcSwapped = 0;
+        uint256 token1DebtToCover = (getVToken1Balance() * _shares) /
+            s_totalShares;
+        uint256 token0DebtToCover = (getVToken0Balance() * _shares) /
+            s_totalShares;
+        uint256 token1BalanceBefore = TransferHelper.safeGetBalance(
+            i_token1Address
+        );
+        uint256 token0BalanceBefore = TransferHelper.safeGetBalance(
+            i_token0Address
+        );
 
-        // uint256 _currentLTV = currentLTV();
-        // if (token1OwnedByUser < token1DebtToCover) {
-        //     token0Swapped += swapAssetToExactAsset(
-        //         i_token0Address,
-        //         i_token1Address,
-        //         token1DebtToCover - token1OwnedByUser
-        //     );
-        //     if (
-        //         token1OwnedByUser +
-        //             TransferHelper.safeGetBalance(i_token1Address) -
-        //             token1BalanceBefore <
-        //         token1DebtToCover
-        //     ) {
-        //         revert ChamberV1__SwappedToken0ForToken1StillCantRepay();
-        //     }
-        // }
-        // i_aaveV3Pool.repay(
-        //     i_token1Address,
-        //     token1DebtToCover,
-        //     2,
-        //     address(this)
-        // );
-        // if (
-        //     TransferHelper.safeGetBalance(i_token1Address) >=
-        //     token1BalanceBefore - token1OwnedByUser
-        // ) {
-        //     token1Remainder =
-        //         TransferHelper.safeGetBalance(i_token1Address) +
-        //         token1OwnedByUser -
-        //         token1BalanceBefore;
-        // } else {
-        //     revert ChamberV1__UserRepaidMoreToken1ThanOwned();
-        // }
+        uint256 token0Swapped = 0;
+        uint256 usdcSwapped = 0;
 
-        // i_aaveV3Pool.withdraw(
-        //     i_usdcAddress,
-        //     (((1e6 * token1DebtToCover * getToken1OraclePrice()) /
-        //         getUsdcOraclePrice()) / _currentLTV),
-        //     address(this)
-        // );
+        uint256 usdcOraclePrice = getUsdcOraclePrice();
 
-        // if (token0OwnedByUser < token0DebtToCover + token0Swapped) {
-        //     usdcSwapped += swapStableToExactAsset(
-        //         i_token0Address,
-        //         token0DebtToCover + token0Swapped - token0OwnedByUser
-        //     );
-        //     if (
-        //         (token0OwnedByUser +
-        //             TransferHelper.safeGetBalance(i_token0Address)) -
-        //             token0BalanceBefore <
-        //         token0DebtToCover
-        //     ) {
-        //         revert ChamberV1__SwappedUsdcForToken0StillCantRepay();
-        //     }
-        // }
+        uint256 _currentLTV = currentLTV();
+        if (token1OwnedByUser < token1DebtToCover) {
+            token0Swapped += swapAssetToExactAsset(
+                i_token0Address,
+                i_token1Address,
+                token1DebtToCover - token1OwnedByUser
+            );
+            if (
+                token1OwnedByUser +
+                    TransferHelper.safeGetBalance(i_token1Address) -
+                    token1BalanceBefore <
+                token1DebtToCover
+            ) {
+                revert ChamberV1__SwappedToken0ForToken1StillCantRepay();
+            }
+        }
+        i_soToken1.repayBorrow(token1DebtToCover);
 
-        // i_aaveV3Pool.repay(
-        //     i_token0Address,
-        //     token0DebtToCover,
-        //     2,
-        //     address(this)
-        // );
+        i_soUSDC.redeemUnderlying(
+            (((((token1DebtToCover * getToken1OraclePrice()) /
+                usdcOraclePrice) *
+                USDC_RATE *
+                PRECISION) / TOKEN1_RATE) / _currentLTV)
+        );
 
-        // if (
-        //     TransferHelper.safeGetBalance(i_token0Address) >=
-        //     token0BalanceBefore - token0OwnedByUser
-        // ) {
-        //     token0Remainder =
-        //         TransferHelper.safeGetBalance(i_token0Address) +
-        //         token0OwnedByUser -
-        //         token0BalanceBefore;
-        // } else {
-        //     revert ChamberV1__UserRepaidMoreToken0ThanOwned();
-        // }
+        if (token0OwnedByUser < token0DebtToCover + token0Swapped) {
+            usdcSwapped += swapStableToExactAsset(
+                i_token0Address,
+                token0DebtToCover + token0Swapped - token0OwnedByUser
+            );
+            if (
+                (token0OwnedByUser +
+                    TransferHelper.safeGetBalance(i_token0Address)) -
+                    token0BalanceBefore <
+                token0DebtToCover
+            ) {
+                revert ChamberV1__SwappedUsdcForToken0StillCantRepay();
+            }
+        }
 
-        // i_aaveV3Pool.withdraw(
-        //     i_usdcAddress,
-        //     (((1e6 * token0DebtToCover * getToken0OraclePrice()) /
-        //         getUsdcOraclePrice()) / _currentLTV),
-        //     address(this)
-        // );
+        i_soToken0.repayBorrow(token0DebtToCover);
 
-        // return (token0Remainder, token1Remainder);
+        i_soUSDC.redeemUnderlying(
+            ((((token1DebtToCover * getToken0OraclePrice()) / usdcOraclePrice) *
+                USDC_RATE *
+                PRECISION) /
+                TOKEN0_RATE /
+                _currentLTV)
+        );
+
+        if (
+            TransferHelper.safeGetBalance(i_token0Address) >=
+            token0BalanceBefore - token0OwnedByUser
+        ) {
+            token0Remainder =
+                TransferHelper.safeGetBalance(i_token0Address) +
+                token0OwnedByUser -
+                token0BalanceBefore;
+        } else {
+            revert ChamberV1__UserRepaidMoreToken0ThanOwned();
+        }
+
+        if (
+            TransferHelper.safeGetBalance(i_token1Address) >=
+            token1BalanceBefore - token1OwnedByUser
+        ) {
+            token1Remainder =
+                TransferHelper.safeGetBalance(i_token1Address) +
+                token1OwnedByUser -
+                token1BalanceBefore;
+        } else {
+            revert ChamberV1__UserRepaidMoreToken1ThanOwned();
+        }
+
+        return (token0Remainder, token1Remainder);
     }
 
     function swapExactAssetToStable(
         address assetIn,
         uint256 amountIn
     ) private returns (uint256) {
-        uint256 amountOut = i_uniswapSwapRouter.exactInput(
-            ISwapRouter.ExactInputParams({
-                path: abi.encodePacked(assetIn, uint24(3000), i_usdcAddress),
-                recipient: address(this),
-                deadline: block.timestamp,
-                amountIn: amountIn,
-                amountOutMinimum: 0
-            })
-        );
+        uint256 amountOut;
+        if (assetIn == i_token0Address) {
+            amountOut = i_uniswapSwapRouter.exactInput(
+                ISwapRouter.ExactInputParams({
+                    path: abi.encodePacked(assetIn, uint24(500), i_usdcAddress),
+                    recipient: address(this),
+                    deadline: block.timestamp,
+                    amountIn: amountIn,
+                    amountOutMinimum: 0
+                })
+            );
+        } else {
+            amountOut = i_uniswapSwapRouter.exactInput(
+                ISwapRouter.ExactInputParams({
+                    path: abi.encodePacked(
+                        assetIn,
+                        uint24(3000),
+                        i_token0Address,
+                        uint24(500),
+                        i_usdcAddress
+                    ),
+                    recipient: address(this),
+                    deadline: block.timestamp,
+                    amountIn: amountIn,
+                    amountOutMinimum: 0
+                })
+            );
+        }
         return (amountOut);
     }
 
@@ -493,15 +516,38 @@ contract ChamberV1_WETHSNX_Sonne is
         address assetOut,
         uint256 amountOut
     ) private returns (uint256) {
-        uint256 amountIn = i_uniswapSwapRouter.exactOutput(
-            ISwapRouter.ExactOutputParams({
-                path: abi.encodePacked(assetOut, uint24(3000), i_usdcAddress),
-                recipient: address(this),
-                deadline: block.timestamp,
-                amountOut: amountOut,
-                amountInMaximum: 1e50
-            })
-        );
+        uint256 amountIn;
+        if (assetOut == i_token0Address) {
+            amountIn = i_uniswapSwapRouter.exactOutput(
+                ISwapRouter.ExactOutputParams({
+                    path: abi.encodePacked(
+                        assetOut,
+                        uint24(500),
+                        i_usdcAddress
+                    ),
+                    recipient: address(this),
+                    deadline: block.timestamp,
+                    amountOut: amountOut,
+                    amountInMaximum: 1e50
+                })
+            );
+        } else {
+            amountIn = i_uniswapSwapRouter.exactOutput(
+                ISwapRouter.ExactOutputParams({
+                    path: abi.encodePacked(
+                        assetOut,
+                        uint24(3000),
+                        i_token0Address,
+                        uint24(500),
+                        i_usdcAddress
+                    ),
+                    recipient: address(this),
+                    deadline: block.timestamp,
+                    amountOut: amountOut,
+                    amountInMaximum: 1e50
+                })
+            );
+        }
         return (amountIn);
     }
 
@@ -512,13 +558,7 @@ contract ChamberV1_WETHSNX_Sonne is
     ) private returns (uint256) {
         uint256 amountIn = i_uniswapSwapRouter.exactOutput(
             ISwapRouter.ExactOutputParams({
-                path: abi.encodePacked(
-                    assetOut,
-                    uint24(3000),
-                    i_usdcAddress,
-                    uint24(3000),
-                    assetIn
-                ),
+                path: abi.encodePacked(assetOut, uint24(3000), assetIn),
                 recipient: address(this),
                 deadline: block.timestamp,
                 amountOut: amountOut,
@@ -562,6 +602,24 @@ contract ChamberV1_WETHSNX_Sonne is
     function _applyFees(uint256 _feeToken0, uint256 _feeToken1) private {
         s_cetraFeeToken0 += (_feeToken0 * CETRA_FEE) / PRECISION;
         s_cetraFeeToken1 += (_feeToken1 * CETRA_FEE) / PRECISION;
+    }
+
+    function _claimAndIncreaseCollateral() public {
+        i_sonneComptroller.claimComp(address(this));
+        if (TransferHelper.safeGetBalance(SONNE_ADDRESS) > 0) {
+            VELO_ROUTER.swapExactTokensForTokensSimple(
+                TransferHelper.safeGetBalance(SONNE_ADDRESS),
+                0,
+                SONNE_ADDRESS,
+                i_usdcAddress,
+                false,
+                address(this),
+                block.timestamp + 60
+            );
+            assert(
+                i_soUSDC.mint(TransferHelper.safeGetBalance(i_usdcAddress)) == 0
+            );
+        }
     }
 
     // =================================

@@ -7,4 +7,6 @@ abstract contract IComptroller {
     function enterMarkets(
         address[] memory cTokens
     ) public virtual returns (uint[] memory);
+
+    function claimComp(address holder) public virtual;
 }

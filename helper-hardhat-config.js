@@ -120,6 +120,8 @@ const networkConfig = {
         minLTV: "600000000000000000",
         maxLTV: "750000000000000000",
         ticksRange: "4100",
+        veloRouterAddress: "0x9c12939390052919aF3155f41Bf4160Fd3666A6f",
+        sonneAddress: "0x1DB2466d9F5e10D7090E7152B68d62703a2245F0",
     },
 };
 

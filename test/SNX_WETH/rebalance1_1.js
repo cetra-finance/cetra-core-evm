@@ -477,7 +477,13 @@ describe("Basic tests sonneSNX", function () {
             .giveApprove(weth.address, currNetworkConfig.uniswapRouterAddress);
         await chamber
             .connect(owner)
-            .giveApprove(weth.address, currNetworkConfig.uniswapPoolAddress);
+            .giveApprove(sonne.address, currNetworkConfig.uniswapRouterAddress);
+        await chamber
+            .connect(owner)
+            .giveApprove(
+                currNetworkConfig.sonneAddress,
+                currNetworkConfig.veloRouterAddress
+            );
         await chamber
             .connect(owner)
             .giveApprove(weth.address, currNetworkConfig.soSNX);
@@ -506,6 +512,28 @@ describe("Basic tests sonneSNX", function () {
     });
 
     describe("checks 1", async function () {
+        it("makes all checks", async function () {
+            await makeAllChecks();
+        });
+    });
+    describe("users burn all their positions", async function () {
+        it("owner burns his position", async function () {
+            const toBurn = await chamber.get_s_userShares(owner.address);
+            await makeBurn(owner, toBurn);
+        });
+
+        it("user1 burns his position", async function () {
+            const toBurn = await chamber.get_s_userShares(user1.address);
+            await makeBurn(user1, toBurn);
+        });
+
+        it("user2 burns his position", async function () {
+            const toBurn = await chamber.get_s_userShares(user2.address);
+            await makeBurn(user2, toBurn);
+        });
+    });
+
+    describe("checks 3", async function () {
         it("makes all checks", async function () {
             await makeAllChecks();
         });
