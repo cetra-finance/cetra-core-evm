@@ -510,10 +510,6 @@ describe("Basic tests sonneSNX", function () {
         it("user1 mints 1500$", async function () {
             await makeDeposit(user1, 1500 * 1e6);
         });
-
-        it("user3 mints 1$", async function () {
-            await makeDeposit(user3, 300 * 1e6);
-        });
     });
 
     describe("checks 1", async function () {

@@ -23,7 +23,7 @@ import "./MathHelper.sol";
 import "./IChamberV1.sol";
 import "./swapHelpers/ISwapHelper.sol";
 
-import "hardhat/console.sol";
+//import "hardhat/console.sol";
 
 /*Errors */
 error ChamberV1__ReenterancyGuard();
@@ -172,7 +172,6 @@ contract ChamberV1_WETHSNX_Sonne is
         uint256 usdcBalanceBefore = TransferHelper.safeGetBalance(
             i_usdcAddress
         );
-        uint256 usdcValueBefore = currentUSDBalance();
         _burn(_shares);
 
         s_totalShares -= _shares;
@@ -390,8 +389,8 @@ contract ChamberV1_WETHSNX_Sonne is
         uint256 token0OwnedByUser,
         uint256 token1OwnedByUser
     ) private returns (uint256, uint256) {
-        uint256 token1Remainder = 0;
-        uint256 token0Remainder = 0;
+        uint256 token1Remainder;
+        uint256 token0Remainder;
 
         uint256 token1DebtToCover = (getVToken1Balance() * _shares) /
             s_totalShares;
@@ -430,98 +429,82 @@ contract ChamberV1_WETHSNX_Sonne is
         }
 
         i_soToken1.repayBorrow(token1DebtToCover);
-        uint256 usdcToRedeem = ((((
-            (token1DebtToCover * getToken1OraclePrice())
-        ) *
-            USDC_RATE *
-            PRECISION) /
-            usdcOraclePrice /
-            TOKEN1_RATE) / _currentLTV);
-        if (usdcToRedeem > (getCompLiquidity() * USDC_RATE) / usdcOraclePrice) {
-            s_liquidityTokenId = false;
-            _burn(s_totalShares);
-            _mint(
-                (TransferHelper.safeGetBalance(i_usdcAddress) *
-                    (s_totalShares - _shares)) / s_totalShares
-            );
-        } else {
-            i_soUSDC.redeemUnderlying(usdcToRedeem);
 
-            if (token0OwnedByUser < token0DebtToCover + token0Swapped) {
-                s_swapHelper.delegatecall(
-                    abi.encodeWithSignature(
-                        "swapStableToExactAsset(address,uint256)",
-                        i_token0Address,
-                        token0DebtToCover + token0Swapped - token0OwnedByUser
-                    )
-                );
-                if (
-                    (token0OwnedByUser +
-                        TransferHelper.safeGetBalance(i_token0Address)) -
-                        token0BalanceBefore <
-                    token0DebtToCover
-                ) {
-                    revert ChamberV1__SwappedUsdcForToken0StillCantRepay();
-                }
-            }
-            i_soToken0.repayBorrow(token0DebtToCover);
-            (, uint256 liquidity, ) = i_sonneComptroller.getAccountLiquidity(
-                address(this)
-            );
-            console.log(
-                (((((token0DebtToCover * getToken0OraclePrice())) *
-                    USDC_RATE *
-                    PRECISION) /
-                    usdcOraclePrice /
-                    TOKEN0_RATE) / _currentLTV),
-                getAUSDCTokenBalance(),
-                (liquidity * 1e6) / usdcOraclePrice
-            );
-            usdcToRedeem = ((((token0DebtToCover * getToken0OraclePrice())) *
+        i_soUSDC.redeemUnderlying(
+            (((((token1DebtToCover * getToken1OraclePrice())) *
                 USDC_RATE *
                 PRECISION) /
                 usdcOraclePrice /
-                TOKEN0_RATE /
-                _currentLTV);
+                TOKEN1_RATE) / _currentLTV)
+        );
 
+        if (token0OwnedByUser < token0DebtToCover + token0Swapped) {
+            s_swapHelper.delegatecall(
+                abi.encodeWithSignature(
+                    "swapStableToExactAsset(address,uint256)",
+                    i_token0Address,
+                    token0DebtToCover + token0Swapped - token0OwnedByUser
+                )
+            );
             if (
-                usdcToRedeem >
-                (getCompLiquidity() * USDC_RATE) / usdcOraclePrice
+                (token0OwnedByUser +
+                    TransferHelper.safeGetBalance(i_token0Address)) -
+                    token0BalanceBefore <
+                token0DebtToCover
             ) {
-                s_liquidityTokenId = false;
-                _burn(s_totalShares);
-                _mint(
-                    (TransferHelper.safeGetBalance(i_usdcAddress) *
-                        (s_totalShares - _shares)) / s_totalShares
-                );
-            } else {
-                i_soUSDC.redeemUnderlying(usdcToRedeem);
-
-                if (
-                    TransferHelper.safeGetBalance(i_token0Address) >=
-                    token0BalanceBefore - token0OwnedByUser
-                ) {
-                    token0Remainder =
-                        TransferHelper.safeGetBalance(i_token0Address) +
-                        token0OwnedByUser -
-                        token0BalanceBefore;
-                } else {
-                    revert ChamberV1__UserRepaidMoreToken0ThanOwned();
-                }
-
-                if (
-                    TransferHelper.safeGetBalance(i_token1Address) >=
-                    token1BalanceBefore - token1OwnedByUser
-                ) {
-                    token1Remainder =
-                        TransferHelper.safeGetBalance(i_token1Address) +
-                        token1OwnedByUser -
-                        token1BalanceBefore;
-                } else {
-                    revert ChamberV1__UserRepaidMoreToken1ThanOwned();
-                }
+                revert ChamberV1__SwappedUsdcForToken0StillCantRepay();
             }
         }
+        i_soToken0.repayBorrow(token0DebtToCover);
+        uint256 usdcToRepay = ((((token0DebtToCover * getToken0OraclePrice())) *
+            USDC_RATE *
+            PRECISION) /
+            usdcOraclePrice /
+            TOKEN0_RATE /
+            _currentLTV);
+        if (
+            usdcToRepay >
+            (getCompLiquidity() * USDC_RATE) / getUsdcOraclePrice()
+        ) {
+            i_soUSDC.redeemUnderlying((usdcToRepay * 50) / 100);
+            i_soUSDC.redeemUnderlying((usdcToRepay * 499) / 1000);
+            // i_soUSDC.redeemUnderlying((usdcToRepay * 8) / 100);
+            // i_soUSDC.redeemUnderlying((usdcToRepay * 8) / 100);
+        } else {
+            i_soUSDC.redeemUnderlying(
+                ((((token0DebtToCover * getToken0OraclePrice())) *
+                    USDC_RATE *
+                    PRECISION) /
+                    usdcOraclePrice /
+                    TOKEN0_RATE /
+                    _currentLTV)
+            );
+        }
+
+        if (
+            TransferHelper.safeGetBalance(i_token0Address) >=
+            token0BalanceBefore - token0OwnedByUser
+        ) {
+            token0Remainder =
+                TransferHelper.safeGetBalance(i_token0Address) +
+                token0OwnedByUser -
+                token0BalanceBefore;
+        } else {
+            revert ChamberV1__UserRepaidMoreToken0ThanOwned();
+        }
+
+        if (
+            TransferHelper.safeGetBalance(i_token1Address) >=
+            token1BalanceBefore - token1OwnedByUser
+        ) {
+            token1Remainder =
+                TransferHelper.safeGetBalance(i_token1Address) +
+                token1OwnedByUser -
+                token1BalanceBefore;
+        } else {
+            revert ChamberV1__UserRepaidMoreToken1ThanOwned();
+        }
+
         return (token0Remainder, token1Remainder);
     }
 
@@ -638,7 +621,7 @@ contract ChamberV1_WETHSNX_Sonne is
 
     function _claimAndIncreaseCollateral() public {
         i_sonneComptroller.claimComp(address(this));
-        if (TransferHelper.safeGetBalance(SONNE_ADDRESS) > 0) {
+        if (TransferHelper.safeGetBalance(SONNE_ADDRESS) > 1e18) {
             VELO_ROUTER.swapExactTokensForTokensSimple(
                 TransferHelper.safeGetBalance(SONNE_ADDRESS),
                 0,
@@ -710,7 +693,6 @@ contract ChamberV1_WETHSNX_Sonne is
     function currentLTV() public view override returns (uint256) {
         // return currentETHBorrowed * getToken0OraclePrice() / currentUSDInCollateral/getUsdOraclePrice()
         uint256 liquidity = getCompLiquidity();
-        console.log(liquidity);
         uint256 ltv = (PRECISION * 9) /
             10 -
             (liquidity * PRECISION * PRECISION * 1e6) /
