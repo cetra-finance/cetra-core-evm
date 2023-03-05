@@ -77,19 +77,28 @@ contract ChamberV1_WETHSNX_Sonne is
 
     address private immutable s_swapHelper;
 
-    address private constant i_usdcAddress = 0x7F5c764cBc14f9669B88837ca1490cCa17c31607;
-    address private constant i_token0Address = 0x4200000000000000000000000000000000000006;
-    address private constant i_token1Address = 0x8700dAec35aF8Ff88c16BdF0418774CB3D7599B4;
+    address private constant i_usdcAddress =
+        0x7F5c764cBc14f9669B88837ca1490cCa17c31607;
+    address private constant i_token0Address =
+        0x4200000000000000000000000000000000000006;
+    address private constant i_token1Address =
+        0x8700dAec35aF8Ff88c16BdF0418774CB3D7599B4;
 
-    ICErc20 private constant i_soUSDC = ICErc20(0xEC8FEa79026FfEd168cCf5C627c7f486D77b765F);
-    ICErc20 private constant i_soToken0 = ICErc20(0xf7B5965f5C117Eb1B5450187c9DcFccc3C317e8E);
-    ICErc20 private constant i_soToken1 = ICErc20(0xD7dAabd899D1fAbbC3A9ac162568939CEc0393Cc);
+    ICErc20 private constant i_soUSDC =
+        ICErc20(0xEC8FEa79026FfEd168cCf5C627c7f486D77b765F);
+    ICErc20 private constant i_soToken0 =
+        ICErc20(0xf7B5965f5C117Eb1B5450187c9DcFccc3C317e8E);
+    ICErc20 private constant i_soToken1 =
+        ICErc20(0xD7dAabd899D1fAbbC3A9ac162568939CEc0393Cc);
 
-    PriceOracle private constant i_sonneOracle = PriceOracle(0xEFc0495DA3E48c5A55F73706b249FD49d711A502);
-    IComptroller private constant i_sonneComptroller = IComptroller(0x60CF091cD3f50420d50fD7f707414d0DF4751C58);
+    PriceOracle private constant i_sonneOracle =
+        PriceOracle(0xEFc0495DA3E48c5A55F73706b249FD49d711A502);
+    IComptroller private constant i_sonneComptroller =
+        IComptroller(0x60CF091cD3f50420d50fD7f707414d0DF4751C58);
 
     // ISwapRouter private constant i_uniswapSwapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
-    IUniswapV3Pool private constant i_uniswapPool = IUniswapV3Pool(0x0392b358CE4547601BEFa962680BedE836606ae2);
+    IUniswapV3Pool private constant i_uniswapPool =
+        IUniswapV3Pool(0x0392b358CE4547601BEFa962680BedE836606ae2);
 
     uint256 private constant USDC_RATE = 1e6;
     uint256 private constant TOKEN0_RATE = 1e18;
@@ -120,10 +129,7 @@ contract ChamberV1_WETHSNX_Sonne is
     // Constructor
     // =================================
 
-    constructor(
-        address _swapHelper,
-        int24 _ticksRange
-    ) {
+    constructor(address _swapHelper, int24 _ticksRange) {
         s_swapHelper = _swapHelper;
         unlocked = true;
         s_ticksRange = _ticksRange;
@@ -166,6 +172,7 @@ contract ChamberV1_WETHSNX_Sonne is
         uint256 usdcBalanceBefore = TransferHelper.safeGetBalance(
             i_usdcAddress
         );
+        uint256 usdcValueBefore = currentUSDBalance();
         _burn(_shares);
 
         s_totalShares -= _shares;
@@ -254,12 +261,11 @@ contract ChamberV1_WETHSNX_Sonne is
             usedLTV = s_targetLTV;
         }
         (amount0, amount1) = calculatePoolReserves(uint128(1e18));
-
-        if(
-            i_soUSDC.mint(TransferHelper.safeGetBalance(i_usdcAddress)) != 0
-        ) {
+        //uint256 balance = TransferHelper.safeGetBalance(i_usdcAddress);
+        if (i_soUSDC.mint(TransferHelper.safeGetBalance(i_usdcAddress)) != 0) {
             revert();
         }
+        //i_soUSDC.redeemUnderlying(balance);
 
         uint256 usdcOraclePrice = getUsdcOraclePrice();
         uint256 token0OraclePrice = getToken0OraclePrice();
@@ -286,18 +292,15 @@ contract ChamberV1_WETHSNX_Sonne is
             PRECISION;
 
         if (token0ToBorrow > 0) {
-            if(i_soToken0.borrow(token0ToBorrow) != 0) {
+            if (i_soToken0.borrow(token0ToBorrow) != 0) {
                 revert();
             }
         }
         if (token1ToBorrow > 0) {
-            if(i_soToken1.borrow(token1ToBorrow) != 0){
+            if (i_soToken1.borrow(token1ToBorrow) != 0) {
                 revert();
             }
         }
-
-        i_sonneComptroller
-            .getAccountLiquidity(address(this));
 
         {
             uint256 token0Recieved = TransferHelper.safeGetBalance(
@@ -387,8 +390,8 @@ contract ChamberV1_WETHSNX_Sonne is
         uint256 token0OwnedByUser,
         uint256 token1OwnedByUser
     ) private returns (uint256, uint256) {
-        uint256 token1Remainder;
-        uint256 token0Remainder;
+        uint256 token1Remainder = 0;
+        uint256 token0Remainder = 0;
 
         uint256 token1DebtToCover = (getVToken1Balance() * _shares) /
             s_totalShares;
@@ -407,11 +410,11 @@ contract ChamberV1_WETHSNX_Sonne is
         uint256 token0Swapped = 0;
 
         if (token1OwnedByUser < token1DebtToCover) {
-            (,bytes memory data) = s_swapHelper.delegatecall(
+            (, bytes memory data) = s_swapHelper.delegatecall(
                 abi.encodeWithSignature(
                     "swapAssetToExactAsset(address,address,uint256)",
-                    i_token1Address,
                     i_token0Address,
+                    i_token1Address,
                     token1DebtToCover - token1OwnedByUser
                 )
             );
@@ -425,68 +428,108 @@ contract ChamberV1_WETHSNX_Sonne is
                 revert ChamberV1__SwappedToken0ForToken1StillCantRepay();
             }
         }
+
         i_soToken1.repayBorrow(token1DebtToCover);
-
-        i_soUSDC.redeemUnderlying(
-            (((((token1DebtToCover * getToken1OraclePrice()) /
-                usdcOraclePrice) *
-                USDC_RATE *
-                PRECISION) / TOKEN1_RATE) / _currentLTV)
-        );
-
-        if (token0OwnedByUser < token0DebtToCover + token0Swapped) {
-            s_swapHelper.delegatecall(
-                abi.encodeWithSignature(
-                    "swapStableToExactAsset(address,uint256)",
-                    i_token0Address,
-                    token0DebtToCover + token0Swapped - token0OwnedByUser
-                )
+        uint256 usdcToRedeem = ((((
+            (token1DebtToCover * getToken1OraclePrice())
+        ) *
+            USDC_RATE *
+            PRECISION) /
+            usdcOraclePrice /
+            TOKEN1_RATE) / _currentLTV);
+        if (usdcToRedeem > (getCompLiquidity() * USDC_RATE) / usdcOraclePrice) {
+            s_liquidityTokenId = false;
+            _burn(s_totalShares);
+            _mint(
+                (TransferHelper.safeGetBalance(i_usdcAddress) *
+                    (s_totalShares - _shares)) / s_totalShares
             );
-            if (
-                (token0OwnedByUser +
-                    TransferHelper.safeGetBalance(i_token0Address)) -
-                    token0BalanceBefore <
-                token0DebtToCover
-            ) {
-                revert ChamberV1__SwappedUsdcForToken0StillCantRepay();
+        } else {
+            i_soUSDC.redeemUnderlying(usdcToRedeem);
+
+            if (token0OwnedByUser < token0DebtToCover + token0Swapped) {
+                s_swapHelper.delegatecall(
+                    abi.encodeWithSignature(
+                        "swapStableToExactAsset(address,uint256)",
+                        i_token0Address,
+                        token0DebtToCover + token0Swapped - token0OwnedByUser
+                    )
+                );
+                if (
+                    (token0OwnedByUser +
+                        TransferHelper.safeGetBalance(i_token0Address)) -
+                        token0BalanceBefore <
+                    token0DebtToCover
+                ) {
+                    revert ChamberV1__SwappedUsdcForToken0StillCantRepay();
+                }
             }
-        }
-
-        i_soToken0.repayBorrow(token0DebtToCover);
-
-        i_soUSDC.redeemUnderlying(
-            ((((token1DebtToCover * getToken0OraclePrice()) / usdcOraclePrice) *
+            i_soToken0.repayBorrow(token0DebtToCover);
+            (, uint256 liquidity, ) = i_sonneComptroller.getAccountLiquidity(
+                address(this)
+            );
+            console.log(
+                (((((token0DebtToCover * getToken0OraclePrice())) *
+                    USDC_RATE *
+                    PRECISION) /
+                    usdcOraclePrice /
+                    TOKEN0_RATE) / _currentLTV),
+                getAUSDCTokenBalance(),
+                (liquidity * 1e6) / usdcOraclePrice
+            );
+            usdcToRedeem = ((((token0DebtToCover * getToken0OraclePrice())) *
                 USDC_RATE *
                 PRECISION) /
+                usdcOraclePrice /
                 TOKEN0_RATE /
-                _currentLTV)
-        );
+                _currentLTV);
 
-        if (
-            TransferHelper.safeGetBalance(i_token0Address) >=
-            token0BalanceBefore - token0OwnedByUser
-        ) {
-            token0Remainder =
-                TransferHelper.safeGetBalance(i_token0Address) +
-                token0OwnedByUser -
-                token0BalanceBefore;
-        } else {
-            revert ChamberV1__UserRepaidMoreToken0ThanOwned();
+            if (
+                usdcToRedeem >
+                (getCompLiquidity() * USDC_RATE) / usdcOraclePrice
+            ) {
+                s_liquidityTokenId = false;
+                _burn(s_totalShares);
+                _mint(
+                    (TransferHelper.safeGetBalance(i_usdcAddress) *
+                        (s_totalShares - _shares)) / s_totalShares
+                );
+            } else {
+                i_soUSDC.redeemUnderlying(usdcToRedeem);
+
+                if (
+                    TransferHelper.safeGetBalance(i_token0Address) >=
+                    token0BalanceBefore - token0OwnedByUser
+                ) {
+                    token0Remainder =
+                        TransferHelper.safeGetBalance(i_token0Address) +
+                        token0OwnedByUser -
+                        token0BalanceBefore;
+                } else {
+                    revert ChamberV1__UserRepaidMoreToken0ThanOwned();
+                }
+
+                if (
+                    TransferHelper.safeGetBalance(i_token1Address) >=
+                    token1BalanceBefore - token1OwnedByUser
+                ) {
+                    token1Remainder =
+                        TransferHelper.safeGetBalance(i_token1Address) +
+                        token1OwnedByUser -
+                        token1BalanceBefore;
+                } else {
+                    revert ChamberV1__UserRepaidMoreToken1ThanOwned();
+                }
+            }
         }
-
-        if (
-            TransferHelper.safeGetBalance(i_token1Address) >=
-            token1BalanceBefore - token1OwnedByUser
-        ) {
-            token1Remainder =
-                TransferHelper.safeGetBalance(i_token1Address) +
-                token1OwnedByUser -
-                token1BalanceBefore;
-        } else {
-            revert ChamberV1__UserRepaidMoreToken1ThanOwned();
-        }
-
         return (token0Remainder, token1Remainder);
+    }
+
+    function getCompLiquidity() private view returns (uint256) {
+        (, uint256 liquidity, ) = i_sonneComptroller.getAccountLiquidity(
+            address(this)
+        );
+        return liquidity;
     }
 
     // function swapExactAssetToStable(
@@ -666,8 +709,8 @@ contract ChamberV1_WETHSNX_Sonne is
 
     function currentLTV() public view override returns (uint256) {
         // return currentETHBorrowed * getToken0OraclePrice() / currentUSDInCollateral/getUsdOraclePrice()
-        (,uint256 liquidity, ) = i_sonneComptroller
-            .getAccountLiquidity(address(this));
+        uint256 liquidity = getCompLiquidity();
+        console.log(liquidity);
         uint256 ltv = (PRECISION * 9) /
             10 -
             (liquidity * PRECISION * PRECISION * 1e6) /
@@ -850,15 +893,15 @@ contract ChamberV1_WETHSNX_Sonne is
     // Getters
     // =================================
 
-    function get_i_aaveVToken0() external view override returns (address) {
+    function get_i_aaveVToken0() external pure override returns (address) {
         return address(i_soToken0);
     }
 
-    function get_i_aaveVToken1() external view override returns (address) {
+    function get_i_aaveVToken1() external pure override returns (address) {
         return address(i_soToken1);
     }
 
-    function get_i_aaveAUSDCToken() external view override returns (address) {
+    function get_i_aaveAUSDCToken() external pure override returns (address) {
         return address(i_soUSDC);
     }
 

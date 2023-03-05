@@ -18,6 +18,10 @@ abstract contract ICErc20 {
         address account
     ) external view virtual returns (uint);
 
+    function borrowBalanceCurrent(
+        address account
+    ) external virtual returns (uint);
+
     function exchangeRateStored() external view virtual returns (uint);
 
     function balanceOf(address owner) external view virtual returns (uint256);

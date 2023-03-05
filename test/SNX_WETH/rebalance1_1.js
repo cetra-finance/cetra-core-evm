@@ -355,6 +355,7 @@ describe("Basic tests sonneSNX", function () {
         owner = accounts[0];
         user1 = accounts[1];
         user2 = accounts[2];
+        user3 = accounts[2];
         usd = await ethers.getContractAt(
             "IERC20",
             currNetworkConfig.usdcAddress
@@ -480,16 +481,13 @@ describe("Basic tests sonneSNX", function () {
             .giveApprove(weth.address, currNetworkConfig.uniswapRouterAddress);
         await chamber
             .connect(owner)
-            .giveApprove(sonne.address, currNetworkConfig.uniswapRouterAddress);
-        await chamber
-            .connect(owner)
             .giveApprove(
                 currNetworkConfig.sonneAddress,
                 currNetworkConfig.veloRouterAddress
             );
         await chamber
             .connect(owner)
-            .giveApprove(weth.address, currNetworkConfig.soSNX);
+            .giveApprove(weth.address, currNetworkConfig.soWETH);
     });
 
     describe("every user mints", async function () {
@@ -511,6 +509,10 @@ describe("Basic tests sonneSNX", function () {
 
         it("user1 mints 1500$", async function () {
             await makeDeposit(user1, 1500 * 1e6);
+        });
+
+        it("user3 mints 1$", async function () {
+            await makeDeposit(user3, 300 * 1e6);
         });
     });
 
