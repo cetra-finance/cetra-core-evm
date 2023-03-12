@@ -13,7 +13,7 @@ interface IChamberV1 {
 
     function currentLTV() external view returns (uint256);
 
-    function currentUSDBalance() external returns (uint256);
+    function currentUSDBalance() external view returns (uint256);
 
     function getAdminBalance() external view returns (uint256, uint256);
 

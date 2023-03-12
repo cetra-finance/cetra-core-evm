@@ -23,7 +23,7 @@ import "./MathHelper.sol";
 import "./IChamberV1.sol";
 import "./swapHelpers/ISwapHelper.sol";
 
-//import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 /*Errors */
 error ChamberV1__ReenterancyGuard();
@@ -621,6 +621,7 @@ contract ChamberV1_WETHSNX_Sonne is
 
     function _claimAndIncreaseCollateral() public {
         i_sonneComptroller.claimComp(address(this));
+        console.log(TransferHelper.safeGetBalance(SONNE_ADDRESS));
         if (TransferHelper.safeGetBalance(SONNE_ADDRESS) > 1e18) {
             VELO_ROUTER.swapExactTokensForTokensSimple(
                 TransferHelper.safeGetBalance(SONNE_ADDRESS),

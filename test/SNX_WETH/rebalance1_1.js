@@ -440,26 +440,11 @@ describe("Basic tests sonneSNX", function () {
 
         await chamber
             .connect(owner)
-            .giveApprove(
-                usd.address,
-                currNetworkConfig.sonneComptrollerAddress
-            );
-        await chamber
-            .connect(owner)
             .giveApprove(usd.address, currNetworkConfig.uniswapRouterAddress);
-        await chamber
-            .connect(owner)
-            .giveApprove(usd.address, currNetworkConfig.uniswapPoolAddress);
         await chamber
             .connect(owner)
             .giveApprove(usd.address, currNetworkConfig.soUSDC);
 
-        await chamber
-            .connect(owner)
-            .giveApprove(
-                snx.address,
-                currNetworkConfig.sonneComptrollerAddress
-            );
         await chamber
             .connect(owner)
             .giveApprove(snx.address, currNetworkConfig.uniswapRouterAddress);
@@ -470,12 +455,6 @@ describe("Basic tests sonneSNX", function () {
             .connect(owner)
             .giveApprove(snx.address, currNetworkConfig.soSNX);
 
-        await chamber
-            .connect(owner)
-            .giveApprove(
-                weth.address,
-                currNetworkConfig.sonneComptrollerAddress
-            );
         await chamber
             .connect(owner)
             .giveApprove(weth.address, currNetworkConfig.uniswapRouterAddress);
@@ -518,6 +497,10 @@ describe("Basic tests sonneSNX", function () {
         });
     });
     describe("users burn all their positions", async function () {
+        it("time passes to accrue incentives", async function () {
+            await network.provider.send("evm_increaseTime", [60000]);
+        });
+
         it("owner burns his position", async function () {
             const toBurn = await chamber.get_s_userShares(owner.address);
             await makeBurn(owner, toBurn);
