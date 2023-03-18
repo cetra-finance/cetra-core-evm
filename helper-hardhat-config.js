@@ -100,7 +100,7 @@ const networkConfig = {
         maxLTV: "720000000000000000",
         aaveAUSDCAddress: "0x625E7708f30cA75bfd92586e17077590C60eb4cD",
         hedgeDev: "200000000000000000",
-        ticksRange: "1000",
+        ticksRange: "4100",
     },
     137: {
         name: "matic",
