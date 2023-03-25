@@ -49,11 +49,9 @@ async function enterChamber() {
             )) /
         BigInt(10) ** BigInt(27);
 
-
-
-
-    let lowerTick = -205620
-    let upperTick = -197400
+    let respFromStorage = await helpers.getStorageAt(chamber.address, 3)
+    let lowerTick = (parseInt(("0x" + respFromStorage.slice(60, 66)), 16) - parseInt("0x1000000", 16))
+    let upperTick = (parseInt(("0x" + respFromStorage.slice(54, 60)), 16) - parseInt("0x1000000", 16))
 
     let position = await uniPool.positions(
         ethers.utils.keccak256(
@@ -91,9 +89,6 @@ async function enterChamber() {
     let fee1 = await computeFee(false, position.feeGrowthInside1LastX128, position._liquidity)
 
     console.log('fees', fee0, fee1)
-
-
-
 
     let usdcPrice = BigInt(await aaveOracle.getAssetPrice(USDC.address));
     let wethPrice = BigInt(await aaveOracle.getAssetPrice(WETH.address));
