@@ -27,7 +27,7 @@ module.exports = {
             chainId: 42161,
            forking: {
                 url: RPC_URL_ARBITRUM,
-                //blockNumber: 39854691
+                blockNumber: 74232775
            }
         },
         matic: {
